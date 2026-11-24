@@ -20,6 +20,14 @@ const KINDS = {
   // title: 제목으로 쓰는 항목 이름(없으면 t). num: 숫자로 읽을 항목. keepFalse: 꺼짐(false)도 줄로 적어야 하는 항목
   habit: { file: '습관.md', check: false, title: 'n', num: ['o', 'g'], keepFalse: ['on'],
     keys: { i: '아이콘', o: '순서', on: '사용', g: '주간 목표', dates: '체크 날짜' } },
+  // 근태: 야근(시간)과 휴가(일수) 기록. 연차: 해마다 총 일수 한 줄
+  att: { file: '근태.md', check: false, num: ['h', 'days', 'taxi'],
+    keys: { type: '유형', d: '날짜', h: '시간', days: '휴가 일수', reason: '사유', taxi: '택시비', paid: '택시비 받음' } },
+  leave: { file: '연차.md', check: false, title: 'y', num: ['total', 'special'],
+    keys: { total: '총 연차', special: '특별휴가' } },
+  // 급여: 달마다 한 줄. 평소 읽기에는 넣지 않고 따로 요청할 때만 준다
+  pay: { file: '급여.md', check: false, title: 'm', num: ['g', 'ded', 'net'],
+    keys: { d: '지급일', g: '지급총액', ded: '공제총액', net: '실수령액', note: '비고' } },
 };
 const DONE = '완료', TODO = '시작 전';
 const MAX_TEXT = 20000;

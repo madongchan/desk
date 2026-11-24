@@ -152,6 +152,56 @@ assert.strictEqual(post('load', {}).data.habits[0].on, false);
 assert.deepStrictEqual(post('trash', { kind: 'habit', id: hid }).data, { id: hid });
 assert.deepStrictEqual(post('load', {}).data.habits, []);
 
+// 근태: 야근과 휴가를 적으면 월별 합계와 남은 연차를 서버가 센다. 포괄임금 기준이라 수당은 없다
+r = post('load', {});
+assert.deepStrictEqual([r.data.att, r.data.months, r.data.leave], [[], [], []]);
+r = post('add', { kind: 'att', fields: { type: '야근', d: today, h: 2.5, reason: '빌드', taxi: 18000 } });
+const taxiId = r.data.id;
+assert.deepStrictEqual([r.data.taxi, r.data.paid], [18000, null]);
+assert.strictEqual(r.ok, true, r.error);
+assert.deepStrictEqual([r.data.t, r.data.type, r.data.h, r.data.reason], ['야근', '야근', 2.5, '빌드']);
+post('add', { kind: 'att', fields: { type: '야근', d: today, h: 1, taxi: 12000 } });                  // 같은 날 두 번 적어도 야근한 날은 하루다
+post('add', { kind: 'att', fields: { type: '반차', d: today, days: 0.5 } });
+post('add', { kind: 'att', fields: { type: '특별휴가', d: today, days: 1 } });
+post('add', { kind: 'att', fields: { type: '대체휴가', d: today, days: 1 } });              // 연차에서 빼지 않는다
+assert.strictEqual(post('add', { kind: 'att', fields: { type: '결근', d: today, days: 1 } }).ok, false);
+assert.strictEqual(post('add', { kind: 'att', fields: { type: '야근', d: '11/24', h: 1 } }).ok, false);
+assert.strictEqual(post('add', { kind: 'att', fields: { type: '야근', d: today } }).ok, false);          // 시간이 없다
+assert.strictEqual(post('add', { kind: 'att', fields: { type: '야근', d: today, h: 30 } }).ok, false);   // 하루는 24시간
+assert.strictEqual(post('add', { kind: 'att', fields: { type: '연차', d: today, days: -1 } }).ok, false);
+r = post('load', {});
+assert.strictEqual(r.data.att.length, 5);
+const monthRow = { id: today.slice(0, 7), m: today.slice(0, 7).replace('-', '.'), days: 1, hours: 3.5, used: 2.5, taxi: 30000, unpaid: 30000 };
+assert.deepStrictEqual(r.data.months, [monthRow]);
+// 택시비: 내가 내고 회사에 청구한다. 받은 것을 표시하면 못 받은 합계에서 빠진다
+assert.strictEqual(post('update', { kind: 'att', id: taxiId, fields: { paid: true } }).data.paid, true);
+assert.deepStrictEqual(post('load', {}).data.months, [{ ...monthRow, unpaid: 12000 }]);
+assert.strictEqual(post('add', { kind: 'att', fields: { type: '야근', d: today, h: 1, taxi: -5 } }).ok, false);
+assert.strictEqual(post('add', { kind: 'att', fields: { type: '연차', d: today, days: 1, taxi: 5000 } }).data.taxi, null);   // 휴가에는 택시비가 없다
+post('trash', { kind: 'att', id: post('load', {}).data.att.filter(x => x.type === '연차')[0].id });
+
+// 급여: 평소 읽기(load)에는 넣지 않는다. 보기를 누를 때만 따로 받아 가고, 화면은 기기에 저장하지 않는다
+r = post('add', { kind: 'pay', fields: { m: '2026.11', d: today, g: 3000000, ded: 400000, net: 2600000 } });
+assert.strictEqual(r.ok, true, r.error);
+assert.deepStrictEqual([r.data.m, r.data.net], ['2026.11', 2600000]);
+post('add', { kind: 'pay', fields: { m: '2026.10', g: 3000000, ded: 400000, net: 2600000 } });
+assert.strictEqual(post('add', { kind: 'pay', fields: { m: '11월', net: 1 } }).ok, false);
+assert.strictEqual(post('add', { kind: 'pay', fields: { m: '2026.12', net: -1 } }).ok, false);
+const loaded = JSON.stringify(post('load', {}).data);
+assert.ok(!('pays' in post('load', {}).data) && !loaded.includes('2600000'));
+assert.deepStrictEqual(post('pays', {}).data.map(p => p.m), ['2026.11', '2026.10']);
+assert.deepStrictEqual(post('load', {}).data.leave, []);                                   // 총 연차를 아직 안 넣었다
+const yy = today.slice(0, 4);
+assert.strictEqual(post('leaveSet', { y: yy, total: 15, special: 3 }).ok, true);
+r = post('load', {});
+assert.deepStrictEqual(r.data.leave.map(l => [l.y, l.total, l.special, l.used, l.left]), [[yy, 15, 3, 1.5, 16.5]]);
+post('leaveSet', { y: yy, total: 16, special: 3 });                                        // 다시 넣으면 그 해 줄을 고친다
+r = post('load', {});
+assert.deepStrictEqual(r.data.leave.map(l => [l.total, l.left]), [[16, 17.5]]);
+assert.strictEqual(post('leaveSet', { y: '올해', total: 15 }).ok, false);
+assert.strictEqual(post('leaveSet', { y: yy, total: -1 }).ok, false);
+assert.strictEqual(post('leaveSet', { y: yy, total: 400 }).ok, false);
+
 // 일정 추가: 입력을 검사한 뒤 캘린더에 쓴다
 assert.strictEqual(post('eventAdd', { title: '회의', date: '11/25' }).ok, false);
 assert.strictEqual(post('eventAdd', { title: ' ', date: today }).ok, false);

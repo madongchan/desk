@@ -12,7 +12,7 @@
  */
 
 const TZ = 'Asia/Seoul';
-const VERSION = '2026-11-24d';
+const VERSION = '2026-11-24f';
 // PC에서 고친 지 이만큼 안 지난 파일에는 읽으면서 번호를 붙여 쓰지 않는다. 옵시디언이 아직 쓰는 중일 수 있다
 const FRESH_MS = 2 * 60 * 1000;
 const TRASH = '휴지통.md';
@@ -168,7 +168,12 @@ const ACTIONS = {
   load: function (a, folder) {
     const today = ymd_(new Date());
     const since = addDays_(today, -60);
-    const texts = withLock_(function () { return { tasks: open_(folder, 'tasks'), memo: open_(folder, 'memo'), habit: open_(folder, 'habit') }; });
+    const texts = withLock_(function () {
+      const t = {};
+      ['tasks', 'memo', 'habit', 'att', 'leave'].forEach(function (k) { t[k] = open_(folder, k); });
+      return t;
+    });
+    const work = attendance_(rows_(texts.att, 'att'), rows_(texts.leave, 'leave'), today);
     const out = {
       today: today, at: new Date().toISOString(), account: account_(), notion: true, v: VERSION,
       // 안 끝난 일 전부 + 최근 60일에 끝낸 일 + 포트폴리오 표시. 나머지 끝낸 일은 history가 준다.
@@ -181,11 +186,21 @@ const ACTIONS = {
       events: [], calError: null, mail: null, mailError: null,
       // 화면이 목록으로 기대하는 칸들. 이 서버는 다루지 않아 비워 둔다
       habits: rows_(texts.habit, 'habit'),
-      jobs: [], att: [], months: [], leave: [], news: [], logs: [], sorries: [], scans: [],
+      att: work.att, months: work.months, leave: work.leave,
+      jobs: [], news: [], logs: [], sorries: [], scans: [],
     };
     // 캘린더를 못 읽어도 할 일은 보여야 한다
     try { out.events = calendarEvents_(addDays_(today, -45), addDays_(today, 90)); } catch (err) { out.calError = String(err && err.message || err); }
     return out;
+  },
+
+  /**
+   * 급여 기록. load에는 넣지 않는다: 화면이 load 결과를 기기에 저장해 두기 때문이다.
+   * 화면에서 「보기」를 누를 때만 이 동작으로 받아 가고, 받은 것은 기기에 저장하지 않는다.
+   */
+  pays: function (a, folder) {
+    const text = withLock_(function () { return open_(folder, 'pay'); });
+    return rows_(text, 'pay').sort(function (x, y) { return String(x.m) < String(y.m) ? 1 : String(x.m) > String(y.m) ? -1 : 0; });
   },
 
   history: function (a, folder) {
@@ -199,6 +214,8 @@ const ACTIONS = {
     checkKind_(a.kind);
     const fields = stampDone_(a.kind, Object.assign({}, a.fields));
     if (a.kind === 'memo') fields.at = new Date().toISOString();
+    if (a.kind === 'att') checkAtt_(fields);
+    if (a.kind === 'pay') checkPay_(fields);
     return withLock_(function () {
       const id = makeId_();
       const text = addRecord(open_(folder, a.kind), a.kind, fields, id);
@@ -227,6 +244,20 @@ const ACTIONS = {
       writeText_(folder, TRASH, bin + '%% ' + ymd_(new Date()) + ' ' + KINDS[a.kind].file + '에서 지움 %%\n' + k.block);
       writeText_(folder, KINDS[a.kind].file, k.text);
       return { id: a.id };
+    });
+  },
+
+  /** 그 해의 총 연차와 특별휴가 일수를 정한다. 그 해 줄이 있으면 고치고 없으면 만든다. */
+  leaveSet: function (a, folder) {
+    const y = String(a.y);
+    if (!/^\d{4}$/.test(y)) throw new Error('연도 형식이 잘못되었습니다');
+    const fields = { total: dayCount_(a.total, '총 연차'), special: dayCount_(a.special == null ? 0 : a.special, '특별휴가') };
+    return withLock_(function () {
+      const was = open_(folder, 'leave');
+      const cur = rows_(was, 'leave').filter(function (r) { return String(r.y) === y; })[0];
+      const text = cur ? updateRecord(was, 'leave', cur.id, fields) : addRecord(was, 'leave', Object.assign({ y: y }, fields), makeId_());
+      writeText_(folder, KINDS.leave.file, text);
+      return { y: y, total: fields.total, special: fields.special };
     });
   },
 
@@ -272,6 +303,84 @@ const ACTIONS = {
     return { ok: true };
   },
 };
+
+/* ───────── 근태 ───────── */
+const ATT_TYPES = ['야근', '연차', '반차', '특별휴가', '대체휴가'];
+
+function dayCount_(v, what) {
+  const n = Number(v);
+  if (v === '' || v === null || !isFinite(n) || n < 0 || n > 366) throw new Error(what + ' 일수가 잘못되었습니다');
+  return n;
+}
+
+/** 근태 기록 한 건을 검사하고 다듬는다. 야근은 시간이, 휴가는 일수가 있어야 한다. */
+function checkAtt_(f) {
+  if (ATT_TYPES.indexOf(f.type) < 0) throw new Error('알 수 없는 근태 유형입니다: ' + f.type);
+  if (!DATE_RE.test(String(f.d))) throw new Error('날짜 형식이 잘못되었습니다');
+  if (f.type === '야근') {
+    const h = Number(f.h);
+    if (f.h == null || f.h === '' || !isFinite(h) || h <= 0 || h > 24) throw new Error('야근 시간은 0보다 크고 24 이하여야 합니다');
+    f.h = h; f.days = null;
+    f.taxi = f.taxi == null || f.taxi === '' ? null : money_(f.taxi, '택시비');
+  } else {
+    f.days = dayCount_(f.days, '휴가');
+    if (f.days <= 0) throw new Error('휴가 일수가 잘못되었습니다');
+    f.h = null; f.taxi = null;      // 휴가에는 택시비가 없다
+  }
+  f.paid = null;                    // 받음 표시는 나중에 고쳐서 붙인다
+  if (!f.t) f.t = f.type;
+}
+
+function money_(v, what) {
+  const n = Number(v);
+  if (v === '' || v === null || !isFinite(n) || n < 0 || n > 1e9) throw new Error(what + ' 금액이 잘못되었습니다');
+  return Math.round(n);
+}
+
+/** 급여 한 줄을 검사한다. 월은 2026.11 모양이다. */
+function checkPay_(f) {
+  if (!/^\d{4}\.(0[1-9]|1[0-2])$/.test(String(f.m))) throw new Error('월은 2026.11처럼 적어 주세요');
+  if (f.d != null && f.d !== '' && !DATE_RE.test(String(f.d))) throw new Error('날짜 형식이 잘못되었습니다');
+  ['g', 'ded', 'net'].forEach(function (k) { if (f[k] != null && f[k] !== '') f[k] = money_(f[k], '급여'); });
+}
+
+/**
+ * 근태 기록에서 월별 합계와 연도별 남은 연차를 센다. 포괄임금 기준이라 수당은 계산하지 않는다.
+ * 남은 연차 = 총 연차 + 특별휴가 − (연차, 반차, 특별휴가로 쓴 일수). 대체휴가는 연차에서 빼지 않는다.
+ */
+function attendance_(att, leaveRows, today) {
+  const round = function (n) { return Math.round(n * 100) / 100; };
+  const byMonth = {}, usedByYear = {};
+  att.forEach(function (r) {
+    const d = String(r.d || '');
+    if (!DATE_RE.test(d)) return;
+    const ym = d.slice(0, 7);
+    const m = byMonth[ym] || (byMonth[ym] = { id: ym, m: ym.replace('-', '.'), nights: {}, hours: 0, used: 0, taxi: 0, unpaid: 0 });
+    if (r.type === '야근') {
+      m.nights[d] = true; m.hours += Number(r.h) || 0;
+      // 택시비는 내가 먼저 내고 회사에 청구한다. 받음 표시가 없는 것이 아직 못 받은 돈이다
+      const taxi = Number(r.taxi) || 0;
+      m.taxi += taxi;
+      if (r.paid !== true) m.unpaid += taxi;
+    }
+    else {
+      m.used += Number(r.days) || 0;
+      if (r.type !== '대체휴가') usedByYear[d.slice(0, 4)] = (usedByYear[d.slice(0, 4)] || 0) + (Number(r.days) || 0);
+    }
+  });
+  const months = Object.keys(byMonth).sort().reverse().map(function (k) {
+    const m = byMonth[k];
+    return { id: m.id, m: m.m, days: Object.keys(m.nights).length, hours: round(m.hours), used: round(m.used), taxi: m.taxi, unpaid: m.unpaid };
+  });
+  const leave = leaveRows.map(function (l) {
+    const used = round(usedByYear[String(l.y)] || 0);
+    return { id: l.id, y: String(l.y), total: l.total || 0, special: l.special || 0, used: used, left: round((l.total || 0) + (l.special || 0) - used) };
+  });
+  const oldest = addDays_(today, -400);
+  const recent = att.filter(function (r) { return String(r.d || '') >= oldest; })
+    .sort(function (x, y) { return String(x.d) < String(y.d) ? 1 : String(x.d) > String(y.d) ? -1 : 0; });
+  return { att: recent, months: months, leave: leave };
+}
 
 /** 할 일의 상태를 바꿀 때 끝낸 날을 같이 적는다(완료면 오늘, 아니면 지운다). 읽기 범위를 이 날짜로 센다. */
 function stampDone_(kind, fields) {

@@ -852,7 +852,7 @@ const S={
   f:{q:"",p:"",y:"",mode:"list"}, sync:{busy:false,err:null}, addDay:null, palette:null,
 };
 // desk: 원본의 브리핑, 오피스 메뉴와 고정 프로젝트는 뺐다
-const VIEWS=[["today","대시보드","today"],["work","업무","work"],["life","일상","life"],["tools","도구","tools"]];
+const VIEWS=[["today","대시보드","today"],["work","업무","work"],["life","일상","life"],["att","근태","att"],["tools","도구","tools"]];
 const PVIEWS=[];
 
 /* ═════════ 서버 ═════════ */
@@ -1502,6 +1502,74 @@ function locate(){if(!navigator.geolocation)return toast("위치를 쓸 수 없�
   navigator.geolocation.getCurrentPosition(p=>{WX.loc={lat:+p.coords.latitude.toFixed(3),lon:+p.coords.longitude.toFixed(3),name:"현재 위치"};ls.set("desk:wxloc",WX.loc);loadWx(true);toast("현재 위치 날씨로 바꿨습니다")},
     ()=>toast("위치 권한이 없어 서울 날씨를 보여 드립니다","bad"),{timeout:8000})}
 
+/* ═════════ desk: 근태 — 포괄임금 기준이라 수당은 세지 않는다. 야근 시간, 택시비 정산, 휴가를 세고 급여는 가려 둔다 ═════════ */
+const hrs=n=>n==null?"–":(Math.round(n*10)/10).toLocaleString("ko-KR")+"h";
+// 급여는 평소 읽기에 들어 있지 않다. 「보기」를 누를 때만 받아 와 여기에만 들고, 기기에 저장하지 않는다
+S.pay={open:false,rows:null,busy:false};
+function viewAtt(){
+  const D=S.data,today=TODAY(),ym=today.slice(0,7).replace("-",".");
+  const months=D.months||[],cur=months.find(m=>m.m===ym),recs=D.att||[];
+  const year=(D.leave||[]).find(l=>String(l.y)===today.slice(0,4));
+  const unpaid=recs.filter(r=>r.type==="야근"&&r.taxi&&r.paid!==true).reduce((s,r)=>s+r.taxi,0);
+  const k=h("div",{class:"kpis"},
+    kpi("이번 달 야근 시간",hrs(cur?cur.hours:0),"",cur&&cur.days?cur.days+"일 야근":""),
+    kpi("못 받은 택시비",won(unpaid),"",unpaid?"받으면 기록에서 「받음」을 누르세요":"모두 받았습니다"),
+    kpi("이번 달 휴가",cur?cur.used:0,"일",""),
+    kpi("남은 연차",year?year.left:"–","일",year?"총 "+(year.total+year.special)+"일 중 "+year.used+"일 사용":"오른쪽에서 올해 총 연차를 넣어 주세요"));
+  const tbl=card("월별 야근·휴가",{icon:"att"},months.length?h("div",{class:"tbl-wrap"},h("table",null,h("thead",null,h("tr",null,["월","야근","야근 시간","택시비","못 받은 택시비","휴가"].map(x=>h("th",null,x)))),
+    h("tbody",null,months.map(m=>h("tr",{class:m===cur?"cur":""},h("td",null,m.m),h("td",null,m.days+"일"),h("td",null,h("b",null,hrs(m.hours))),h("td",null,m.taxi?won(m.taxi):"–"),h("td",null,m.unpaid?h("b",null,won(m.unpaid)):"–"),h("td",null,m.used?m.used+"일":"–")))))):h("div",{class:"empty"},"기록이 없습니다"));
+  const togglePaid=r=>{const next=r.paid!==true;mutate(D=>{byId(D.att,r.id).paid=next},async()=>{await api("update",{kind:"att",id:r.id,fields:{paid:next}});refresh(true)},next?"받은 것으로 표시했습니다":null)};
+  const list=card("최근 기록",{count:recs.length+"건"},recs.length?h("div",null,recs.slice(0,40).map(r=>
+    h("div",{class:"memo"},h("div",null,h("p",null,h("span",{class:"pill "+({"야근":"orange","연차":"blue","반차":"blue","특별휴가":"green"}[r.type]||"")},r.type||"—")," ",r.d?fmtMD(dOf(r.d)):"",r.reason?" · "+r.reason:""),
+      h("div",{class:"meta"},r.h?h("span",null,hrs(r.h)):null,r.days?h("span",null,r.days+"일"):null,r.taxi?h("span",null,"택시 "+won(r.taxi)+(r.paid===true?" · 받음":" · 못 받음")):null)),
+      h("div",{class:"acts"},r.taxi?h("button",{class:"btn ghost sm",onclick:()=>togglePaid(r)},r.paid===true?"받음 취소":"받음"):null,
+        confirmBtn("기록 지우기",()=>trash("att",r.id,"att").then(()=>refresh(true))))))):h("div",{class:"empty"},"기록이 없습니다"));
+  return [k,h("div",{class:"grid g-today"},h("div",{class:"stack"},tbl,list,payCard()),h("div",{class:"stack"},attForm(),leaveForm(year)))];
+}
+function attForm(){
+  const t=S.drafts["a-type"]||"야근",ot=t==="야근";
+  const num=(id,label,step)=>h("label",{class:"field"},h("label",null,label),draftIn(id,{type:"number",step:step||"0.5",min:"0",placeholder:"0"}));
+  return card("기록 추가",{icon:"plus"},
+    h("div",{class:"seg",role:"group","aria-label":"유형"},["야근","연차","반차","특별휴가","대체휴가"].map(x=>h("button",{"aria-pressed":String(t===x),onclick:()=>{S.drafts["a-type"]=x;if(x==="반차")S.drafts["a-days"]="0.5";else if(x!=="야근")S.drafts["a-days"]="1";render()}},x))),
+    h("label",{class:"field"},h("label",null,"날짜"),draftIn("a-date",{type:"date",value:S.drafts["a-date"]||TODAY()})),
+    ot?h("div",{class:"grid g2",style:"gap:10px"},num("a-h","야근 시간"),num("a-taxi","택시비 (원, 없으면 비움)","100")):num("a-days","휴가 일수"),
+    h("label",{class:"field"},h("label",null,ot?"야근 사유":"메모"),draftIn("a-reason",{placeholder:"선택"})),
+    h("button",{class:"btn pri",onclick:()=>{const g=k=>S.drafts[k];const f={type:t,d:g("a-date")||TODAY(),reason:g("a-reason")||""};
+      if(ot){if(!(+g("a-h")>0)){toast("야근 시간을 넣어 주세요","bad");return}f.h=+g("a-h");if(g("a-taxi"))f.taxi=+g("a-taxi")}else f.days=+(g("a-days")||1);
+      ["a-h","a-taxi","a-reason","a-days"].forEach(k=>S.drafts[k]="");
+      const tmp="tmp-a"+Date.now();mutate(D=>D.att.unshift(Object.assign({id:tmp},f)),async()=>{const r=await api("add",{kind:"att",fields:f});replaceIn(S.data.att,tmp,r);refresh(true)},"근태 기록을 저장했습니다")}},"저장"));
+}
+function leaveForm(year){
+  const y=TODAY().slice(0,4);
+  if(S.drafts["l-total"]===undefined&&year){S.drafts["l-total"]=String(year.total);S.drafts["l-special"]=String(year.special)}
+  const dayIn=(id,label)=>h("label",{class:"field"},h("label",null,label),draftIn(id,{type:"number",step:"0.5",min:"0",placeholder:"0"}));
+  return card(y+"년 연차",{icon:"cal"},h("div",{class:"grid g2",style:"gap:10px"},dayIn("l-total","총 연차 (일)"),dayIn("l-special","특별휴가 (일)")),
+    h("div",{class:"faint",style:"font-size:12px"},"쓴 휴가는 기록에서 자동으로 뺍니다. 대체휴가는 연차에서 빼지 않습니다."),
+    h("button",{class:"btn",onclick:async()=>{const total=S.drafts["l-total"];if(total===""||total==null){toast("총 연차를 넣어 주세요","bad");return}
+      try{await api("leaveSet",{y,total:+total,special:+(S.drafts["l-special"]||0)});toast("연차를 저장했습니다");refresh()}catch(e){toast("저장 실패 · "+e.message,"bad")}}},"저장"));
+}
+function payCard(){
+  const P=S.pay;
+  const hide=()=>{S.pay={open:false,rows:null,busy:false};render()};
+  const show=async()=>{P.busy=true;render();try{P.rows=await api("pays",{});P.open=true}catch(e){toast("급여를 불러오지 못했습니다 · "+e.message,"bad")}P.busy=false;render()};
+  if(!P.open)return card("급여",{icon:"att",right:h("button",{class:"btn sm",onclick:()=>{if(!P.busy)show()}},P.busy?"불러오는 중…":"보기")},
+    h("div",{class:"empty"},"금액은 가려져 있습니다. 「보기」를 누를 때만 서버에서 받아 오고 이 기기에는 저장하지 않습니다. 다른 화면으로 가면 다시 가려집니다."));
+  const rows=P.rows||[];
+  const add=async()=>{const g=k=>S.drafts[k];const amt=k=>g(k)?+g(k):null;
+    const f={m:(g("p-m")||"").trim(),d:g("p-d")||null,g:amt("p-g"),ded:amt("p-ded"),net:amt("p-net")};
+    try{await api("add",{kind:"pay",fields:f});["p-m","p-d","p-g","p-ded","p-net"].forEach(k=>S.drafts[k]="");toast("급여 기록을 저장했습니다");await show()}catch(e){toast("저장 실패 · "+e.message,"bad")}};
+  const del=async p=>{try{await api("trash",{kind:"pay",id:p.id});await show()}catch(e){toast("지우지 못했습니다 · "+e.message,"bad")}};
+  const amtIn=(id,label)=>h("label",{class:"field"},h("label",null,label),draftIn(id,{type:"number",min:"0",placeholder:"0"}));
+  return card("급여",{icon:"att",count:rows.length+"건",right:h("button",{class:"btn sm",onclick:hide},"가리기")},
+    rows.length?h("div",{class:"tbl-wrap"},h("table",null,h("thead",null,h("tr",null,["월","지급일","지급총액","공제총액","실수령액",""].map(x=>h("th",null,x)))),
+      h("tbody",null,rows.map(p=>h("tr",null,h("td",null,p.m),h("td",null,p.d?fmtMD(dOf(p.d)):"–"),h("td",null,won(p.g)),h("td",null,won(p.ded)),h("td",null,h("b",null,won(p.net))),h("td",null,confirmBtn("급여 기록 지우기",()=>del(p)))))))):h("div",{class:"empty"},"급여 기록이 없습니다"),
+    h("div",{class:"grid g2",style:"gap:10px"},
+      h("label",{class:"field"},h("label",null,"월 (예: 2026.11)"),draftIn("p-m",{placeholder:TODAY().slice(0,7).replace("-",".")})),
+      h("label",{class:"field"},h("label",null,"지급일"),draftIn("p-d",{type:"date"})),
+      amtIn("p-g","지급총액"),amtIn("p-ded","공제총액"),amtIn("p-net","실수령액")),
+    h("button",{class:"btn",onclick:add},"급여 기록 추가"));
+}
+
 function setupView(){
   const err=S.setupErr;
   return h("div",{class:"setup"},h("div",{class:"box"},
@@ -1531,6 +1599,7 @@ function render(){
   if(!S.data){$("#app").hidden=true;fill(layer,setupView());restore();return}
   // desk: 뺀 화면(일상, 도구 등)으로 가는 버튼이 원본 곳곳에 남아 있다. 어디서 오든 남긴 화면으로 돌린다
   if(!VIEWS.some(v=>v[0]===S.view))S.view="today";
+  if(S.view!=="att"&&S.pay.open)S.pay={open:false,rows:null,busy:false}; // desk: 근태 화면을 떠나면 급여를 다시 가린다
   $("#app").hidden=false;syncProjects();
   const cnt=navCounts();
   fill($("#nav"),h("h6",null,"desk"),VIEWS.map(([k,n,icn],i)=>h("button",{"aria-current":S.view===k?"page":null,onclick:()=>{S.view=k;ls.set("desk:view",k);S.sel=null;render();$("#scroll").scrollTop=0},title:`${n} (${i+1})`},ic(icn),n,cnt[k]?h("span",{class:"c"},cnt[k]):null)),
@@ -1545,7 +1614,7 @@ function render(){
     h("button",{class:"search",onclick:openPalette,"aria-label":"검색 (⌘K)"},ic("search"),h("span",null,"검색·명령"),h("kbd",null,"⌘K")),
     h("button",{class:"btn pri",onclick:()=>openQuick("task")},ic("plus"),"새로 만들기"));
   S.enter=S._pv!==S.view;S._pv=S.view;
-  const views={today:viewToday,work:viewWork,life:viewLife,tools:viewTools};
+  const views={today:viewToday,work:viewWork,life:viewLife,att:viewAtt,tools:viewTools};
   let content;try{content=(views[S.view]||viewToday)()}catch(e){console.error(e);content=h("div",{class:"banner"},"이 화면을 그리는 중 문제가 생겼습니다: "+e.message)}
   fill($("#page"),...[connBanner(),S.demo?h("div",{class:"banner"},"지금은 예시 데이터입니다. 실제 옵시디언과 연결하려면 ",h("button",{class:"btn sm",onclick:lock},"연결하기"),"를 누르세요."):null,...[].concat(content)].filter(Boolean));
   fill(layer,...[withGrip(sheetView()),dayModal(),paletteView(),quickModal(),diagView()].filter(Boolean));
@@ -1598,14 +1667,16 @@ function demoData(){
     events:[{id:id(),t:"예시) 팀 회의",all:false,s:new Date(t+"T10:00:00").toISOString(),e:new Date(t+"T11:00:00").toISOString(),cal:"예시",color:"#0a84ff"},
       {id:id(),t:"예시) 병원 예약",all:false,s:new Date(a(2)+"T14:00:00").toISOString(),e:new Date(a(2)+"T15:00:00").toISOString(),cal:"예시",color:"#bf5af2"}],
     habits:[{id:id(),n:"물 마시기",i:"💧",g:7,on:true,dates:[a(-1),a(-2)].join(",")},{id:id(),n:"운동",i:"🏃",g:3,on:true,dates:a(-2)},{id:id(),n:"독서",i:"📖",g:5,on:true,dates:""}],memos:[{id:id(),t:"예시) 다음 주에 확인할 것 적어 두기",k:"아이디어",pin:true,at:new Date().toISOString()}],
-    jobs:[],att:[],months:[],leave:[],mail:null,account:"me@example.com",work:null,news:[],logs:[],sorries:[]};
+    jobs:[],att:[{id:id(),t:"야근",type:"야근",d:a(-1),h:2,taxi:18000,paid:null,reason:"예시) 빌드 마감"},{id:id(),t:"연차",type:"연차",d:a(-6),days:1}],
+    months:[{id:t.slice(0,7),m:t.slice(0,7).replace("-","."),days:1,hours:2,used:1,taxi:18000,unpaid:18000}],leave:[{id:id(),y:t.slice(0,4),total:15,special:0,used:1,left:14}],mail:null,account:"me@example.com",work:null,news:[],logs:[],sorries:[]};
 }
 async function demoApi(action,args){
   await new Promise(r=>setTimeout(r,150));
   if(action==="load")return S.data;
   if(action==="add")return Object.assign({id:"demo-"+Date.now()},args.fields);
-  if(action==="update")return Object.assign({},byId(S.data[{tasks:"tasks",habit:"habits",memo:"memos"}[args.kind]]||[],args.id)||{},args.fields);
+  if(action==="update")return Object.assign({},byId(S.data[{tasks:"tasks",habit:"habits",memo:"memos",att:"att"}[args.kind]]||[],args.id)||{},args.fields);
   if(action==="habitToggle")return byId(S.data.habits,args.id);
+  if(action==="pays")return [{id:"demo-pay",m:TODAY().slice(0,7).replace("-","."),d:TODAY(),g:3000000,ded:400000,net:2600000}];
   if(action==="memoToTask")return {id:"demo-"+Date.now(),t:args.text,d:args.date,s:"시작 전"};
   return {};
 }
