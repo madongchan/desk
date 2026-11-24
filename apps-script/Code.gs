@@ -3,17 +3,17 @@
  *
  * 화면(index.html)은 이 주소로만 데이터를 주고받는다.
  * 화면이 쓰는 요청과 응답의 모양은 '햄찌스 데스크'와 같고, 원본만 노션 대신
- * 구글 드라이브 안 옵시디언 볼트의 todo/ 폴더 노트다.
+ * 구글 드라이브 안 옵시디언 볼트의 desk/ 폴더 노트다.
  *
  * 설정(처음 1번) — 자세한 순서는 README.md
  *   스크립트 속성  PASS        = 비밀번호(11글자 이상)
- *                  TODO_FOLDER = 볼트 todo 폴더의 위치. 경로(Z:\ObsidianFolder\todo)나 드라이브 번호
+ *                  TODO_FOLDER = 볼트 desk 폴더의 위치. 경로(Z:\ObsidianFolder\desk)나 드라이브 번호
  *                  LOG_FILE    = (선택) 작업 로그 파일의 위치. 경로(Z:\ObsidianFolder\log.md)나 드라이브 번호
  *   배포 → 웹 앱 / 실행: 나 / 액세스: 모든 사용자
  */
 
 const TZ = 'Asia/Seoul';
-const VERSION = '2026-11-24k';
+const VERSION = '2026-11-24l';
 // PC에서 고친 지 이만큼 안 지난 파일에는 읽으면서 번호를 붙여 쓰지 않는다. 옵시디언이 아직 쓰는 중일 수 있다
 const FRESH_MS = 2 * 60 * 1000;
 const TRASH = '휴지통.md';
@@ -58,14 +58,14 @@ function checkPass_(pass) {
 
 function todoFolder_() {
   const id = PropertiesService.getScriptProperties().getProperty('TODO_FOLDER');
-  if (!id) throw new Error('서버에 TODO_FOLDER(todo 폴더 위치)가 설정되지 않았습니다');
+  if (!id) throw new Error('서버에 TODO_FOLDER(desk 폴더 위치)가 설정되지 않았습니다');
   return locate_(id, false);
 }
 
 /**
  * 스크립트 속성에 적힌 위치를 드라이브에서 찾는다. 두 가지로 적을 수 있다.
  *   번호: 드라이브 주소에 보이는 긴 글자
- *   경로: 내 드라이브 맨 위부터의 이름. ObsidianFolder/todo. PC에서 보이는 Z:\ObsidianFolder\todo를 그대로 적어도 된다
+ *   경로: 내 드라이브 맨 위부터의 이름. ObsidianFolder/desk. PC에서 보이는 Z:\ObsidianFolder\desk를 그대로 적어도 된다
  * 구글 서버는 PC의 드라이브 글자(Z:)를 모르므로 떼어 내고, 내 드라이브 맨 위에서 이름으로 찾아 들어간다.
  * 이름으로 찾는 것은 느려서 한 번 찾은 번호를 6시간 기억한다.
  */
@@ -290,7 +290,7 @@ const ACTIONS = {
 
   /**
    * 옵시디언 작업 로그(log.md)를 읽어 최근 기록과 정리 안 된 문장을 준다. 읽기만 하고 고치지 않는다.
-   * todo 폴더 밖의 파일이라 스크립트 속성 LOG_FILE에 그 파일 하나의 ID를 따로 적어야 한다.
+   * desk 폴더 밖의 파일이라 스크립트 속성 LOG_FILE에 그 파일 하나의 ID를 따로 적어야 한다.
    * 작업 내용이 들어 있으므로 load에는 넣지 않는다. 화면이 열 때만 받아 가고 기기에 저장하지 않는다.
    */
   worklog: function () {
@@ -492,7 +492,7 @@ function stampDone_(kind, fields) {
 /** 연결 확인: 폴더 이름과 일정 개수를 찍는다. 처음 실행하면 드라이브, 캘린더 권한을 묻는다. */
 function testConnection() {
   const today = ymd_(new Date());
-  Logger.log('todo 폴더: ' + todoFolder_().getName() + ' (번호 ' + todoFolder_().getId() + ')');
+  Logger.log('desk 폴더: ' + todoFolder_().getName() + ' (번호 ' + todoFolder_().getId() + ')');
   Logger.log('앞으로 7일 일정: ' + calendarEvents_(today, addDays_(today, 7)).length + '개');
 }
 
