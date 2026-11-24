@@ -17,6 +17,9 @@ const KINDS = {
     keys: { d: '날짜', s: '상태', p: '프로젝트', y: '유형', r: '우선순위', c: '분류', k: '핵심업무', star: '포트폴리오', detail: '세부', note: '비고', out: '성과', fin: '완료일' } },
   memo: { file: '메모.md', check: false,
     keys: { k: '종류', pin: '고정', st: '상태', at: '작성' } },
+  // title: 제목으로 쓰는 항목 이름(없으면 t). num: 숫자로 읽을 항목. keepFalse: 꺼짐(false)도 줄로 적어야 하는 항목
+  habit: { file: '습관.md', check: false, title: 'n', num: ['o', 'g'], keepFalse: ['on'],
+    keys: { i: '아이콘', o: '순서', on: '사용', g: '주간 목표', dates: '체크 날짜' } },
 };
 const DONE = '완료', TODO = '시작 전';
 const MAX_TEXT = 20000;
@@ -89,6 +92,9 @@ function decode_(s) {
 
 const isDone_ = function (mark) { return mark === 'x' || mark === 'X'; };
 const blank_ = function (v) { return v === null || v === undefined || v === '' || v === false; };
+const titleKey_ = function (K) { return K.title || 't'; };
+/** 이 값이면 줄을 적지 않는가. 꺼짐을 적어야 하는 항목의 false는 적는다. */
+const omit_ = function (K, key, v) { return blank_(v) && !(v === false && K.keepFalse && K.keepFalse.indexOf(key) >= 0); };
 
 /**
  * 건의 딸린 줄에서 항목을 읽는다. fields는 값, at은 그 항목이 적힌 줄 번호다.
@@ -118,7 +124,7 @@ function itemLine_(mark, title, id) { return '- [' + mark + '] ' + title + (id ?
 /** 화면이 보낸 항목을 검사한다. 모르는 이름과 엉뚱한 값은 노트에 닿기 전에 거절한다. */
 function checkFields_(K, fields) {
   Object.keys(fields || {}).forEach(function (key) {
-    if (key !== 't' && !has_(K.keys, key)) throw new Error('알 수 없는 항목입니다: ' + key);
+    if (key !== titleKey_(K) && !has_(K.keys, key)) throw new Error('알 수 없는 항목입니다: ' + key);
     const v = fields[key];
     const ok = v === null || typeof v === 'boolean' || (typeof v === 'number' && isFinite(v)) || (typeof v === 'string' && v.length <= MAX_TEXT);
     if (!ok) throw new Error('값 형식이 잘못되었습니다: ' + key);
@@ -134,8 +140,13 @@ function cleanTitle(s) {
 function listRecords(text, kind) {
   const K = kind_(kind), s = splitLines_(text);
   return scan_(s.lines).map(function (f) {
-    const b = readBlock_(s.lines, f, K), o = { id: f.id, t: f.title };
-    for (const key in K.keys) o[key] = has_(b.fields, key) ? b.fields[key] : null;
+    const b = readBlock_(s.lines, f, K), o = { id: f.id };
+    o[titleKey_(K)] = f.title;
+    for (const key in K.keys) {
+      let v = has_(b.fields, key) ? b.fields[key] : null;
+      if (K.num && K.num.indexOf(key) >= 0 && typeof v === 'string' && v.trim() !== '' && isFinite(Number(v))) v = Number(v);
+      o[key] = v;
+    }
     return o;
   });
 }
@@ -159,12 +170,12 @@ function ensureIds(text, makeId) {
 function addRecord(text, kind, fields, id) {
   const K = kind_(kind);
   checkFields_(K, fields);
-  const title = cleanTitle(fields && fields.t);
+  const title = cleanTitle(fields && fields[titleKey_(K)]);
   if (!title) throw new Error('제목이 비었습니다');
   const eol = splitLines_(text).eol;
   const block = [itemLine_(K.check && fields.s === DONE ? 'x' : ' ', title, id)];
   for (const key in K.keys) {
-    if (!blank_(fields[key]) && !impliedStatus_(K, key, fields[key])) block.push(fieldLine_(K, key, fields[key]));
+    if (!omit_(K, key, fields[key]) && !impliedStatus_(K, key, fields[key])) block.push(fieldLine_(K, key, fields[key]));
   }
   return text + (text && !/\n$/.test(text) ? eol : '') + block.join(eol) + eol;
 }
@@ -184,14 +195,14 @@ function updateRecord(text, kind, id, fields) {
 
   Object.keys(fields).forEach(function (key) {
     const v = fields[key];
-    if (key === 't') {
+    if (key === titleKey_(K)) {
       title = cleanTitle(v);
       if (!title) throw new Error('제목이 비었습니다');
       return;
     }
     // 완료 여부가 실제로 바뀔 때만 체크 표시를 새로 쓴다. 손으로 쓴 [X], [-]는 무관한 수정에 그대로 남는다
     if (K.check && key === 's' && (v === DONE) !== isDone_(mark)) mark = v === DONE ? 'x' : ' ';
-    const gone = blank_(v) || impliedStatus_(K, key, v);
+    const gone = omit_(K, key, v) || impliedStatus_(K, key, v);
     if (has_(b.at, key)) {
       if (gone) drop.push(b.at[key]); else s.lines[b.at[key]] = fieldLine_(K, key, v);
     } else if (!gone) append.push(fieldLine_(K, key, v));

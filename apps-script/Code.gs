@@ -12,7 +12,7 @@
  */
 
 const TZ = 'Asia/Seoul';
-const VERSION = '2026-11-24c';
+const VERSION = '2026-11-24d';
 // PC에서 고친 지 이만큼 안 지난 파일에는 읽으면서 번호를 붙여 쓰지 않는다. 옵시디언이 아직 쓰는 중일 수 있다
 const FRESH_MS = 2 * 60 * 1000;
 const TRASH = '휴지통.md';
@@ -168,7 +168,7 @@ const ACTIONS = {
   load: function (a, folder) {
     const today = ymd_(new Date());
     const since = addDays_(today, -60);
-    const texts = withLock_(function () { return { tasks: open_(folder, 'tasks'), memo: open_(folder, 'memo') }; });
+    const texts = withLock_(function () { return { tasks: open_(folder, 'tasks'), memo: open_(folder, 'memo'), habit: open_(folder, 'habit') }; });
     const out = {
       today: today, at: new Date().toISOString(), account: account_(), notion: true, v: VERSION,
       // 안 끝난 일 전부 + 최근 60일에 끝낸 일 + 포트폴리오 표시. 나머지 끝낸 일은 history가 준다.
@@ -180,7 +180,8 @@ const ACTIONS = {
       memos: rows_(texts.memo, 'memo').filter(function (m) { return m.st !== '옮김'; }),
       events: [], calError: null, mail: null, mailError: null,
       // 화면이 목록으로 기대하는 칸들. 이 서버는 다루지 않아 비워 둔다
-      habits: [], jobs: [], att: [], months: [], leave: [], news: [], logs: [], sorries: [], scans: [],
+      habits: rows_(texts.habit, 'habit'),
+      jobs: [], att: [], months: [], leave: [], news: [], logs: [], sorries: [], scans: [],
     };
     // 캘린더를 못 읽어도 할 일은 보여야 한다
     try { out.events = calendarEvents_(addDays_(today, -45), addDays_(today, 90)); } catch (err) { out.calError = String(err && err.message || err); }
@@ -226,6 +227,24 @@ const ACTIONS = {
       writeText_(folder, TRASH, bin + '%% ' + ymd_(new Date()) + ' ' + KINDS[a.kind].file + '에서 지움 %%\n' + k.block);
       writeText_(folder, KINDS[a.kind].file, k.text);
       return { id: a.id };
+    });
+  },
+
+  /** 습관의 그 날짜 체크를 켜거나 끈다. 체크한 날짜는 쉼표로 이어 한 줄에 적고, 400일 넘은 것은 버린다. */
+  habitToggle: function (a, folder) {
+    if (!DATE_RE.test(String(a.date))) throw new Error('날짜 형식이 잘못되었습니다');
+    return withLock_(function () {
+      const was = open_(folder, 'habit');
+      const cur = one_(was, 'habit', a.id);
+      if (!cur) throw new Error('항목을 찾을 수 없습니다');
+      const days = String(cur.dates || '').split(',').map(function (s) { return s.trim(); }).filter(function (s) { return DATE_RE.test(s); });
+      const at = days.indexOf(a.date);
+      if (at >= 0) days.splice(at, 1); else days.push(a.date);
+      const oldest = addDays_(ymd_(new Date()), -400);
+      const keep = days.filter(function (d) { return d >= oldest; }).sort();
+      const text = updateRecord(was, 'habit', a.id, { dates: keep.join(',') });
+      writeText_(folder, KINDS.habit.file, text);
+      return one_(text, 'habit', a.id);
     });
   },
 

@@ -47,7 +47,7 @@ assert.match(id, /^[a-z0-9]{6}$/);
 assert.deepStrictEqual([r.data.t, r.data.d, r.data.s, r.data.p, r.data.r, r.data.u], ['첫 일 둘째 줄', today, '시작 전', '업무', '상', null]);
 assert.strictEqual(text('할 일.md'), '- [ ] 첫 일 둘째 줄 ^' + id + '\n    날짜:: ' + today + '\n    프로젝트:: 업무\n    우선순위:: 상\n');
 // 거절되는 추가
-assert.strictEqual(post('add', { kind: 'habit', fields: { n: 'a' } }).ok, false);
+assert.strictEqual(post('add', { kind: 'gong', fields: { t: 'a' } }).ok, false);
 assert.strictEqual(post('add', { kind: 'constructor', fields: { t: 'a' } }).ok, false);
 assert.strictEqual(post('add', { kind: 'tasks', fields: { t: 'a', hack: 1 } }).ok, false);
 assert.strictEqual(post('add', { kind: 'tasks', fields: { d: today } }).ok, false);
@@ -134,6 +134,23 @@ assert.strictEqual(text('할 일.md'), tasksBefore);
 fileOf('휴지통.md').setContent(text('휴지통.md') + '손으로 쓴 끝줄');
 post('trash', { kind: 'memo', id: mid });
 assert.ok(text('휴지통.md').includes('손으로 쓴 끝줄\n%% '));
+
+// 습관: 추가, 읽기, 날짜 체크와 해제, 숨기기
+r = post('add', { kind: 'habit', fields: { n: '운동', i: '운', g: 3, on: true } });
+assert.strictEqual(r.ok, true, r.error);
+const hid = r.data.id;
+assert.deepStrictEqual([r.data.n, r.data.g, r.data.on, r.data.u], ['운동', 3, true, null]);
+assert.strictEqual(post('habitToggle', { id: hid, date: today }).data.dates, today);
+assert.strictEqual(post('habitToggle', { id: hid, date: daysAgo(1) }).data.dates, daysAgo(1) + ',' + today);
+assert.strictEqual(post('habitToggle', { id: hid, date: today }).data.dates, daysAgo(1));
+assert.strictEqual(post('habitToggle', { id: hid, date: '11/24' }).ok, false);
+assert.strictEqual(post('habitToggle', { id: 'nope00', date: today }).ok, false);
+post('habitToggle', { id: hid, date: daysAgo(500) });
+assert.strictEqual(post('load', {}).data.habits[0].dates, daysAgo(1));          // 400일 넘은 체크는 버린다
+assert.strictEqual(post('update', { kind: 'habit', id: hid, fields: { on: false } }).data.on, false);
+assert.strictEqual(post('load', {}).data.habits[0].on, false);
+assert.deepStrictEqual(post('trash', { kind: 'habit', id: hid }).data, { id: hid });
+assert.deepStrictEqual(post('load', {}).data.habits, []);
 
 // 일정 추가: 입력을 검사한 뒤 캘린더에 쓴다
 assert.strictEqual(post('eventAdd', { title: '회의', date: '11/25' }).ok, false);

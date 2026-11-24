@@ -107,4 +107,15 @@ assert.ok(N.updateRecord('\uFEFF- [ ] A ^a1\n', 'tasks', 'a1', { r: '상' }).sta
 // 객체에 원래 있는 이름과 같은 번호
 assert.strictEqual(N.ensureIds('- [ ] A ^constructor\n- [ ] B ^toString\n', () => 'zzzzzz').changed, false);
 
+/* ── 습관 종류: 제목 항목이 n이고, 숫자 항목과 꺼짐(false)을 그대로 지킨다 ── */
+const hb = N.addRecord('', 'habit', { n: '물 마시기', i: '물', g: 7, on: true, o: 1 }, 'hhhhhh');
+assert.strictEqual(hb, '- [ ] 물 마시기 ^hhhhhh\n    아이콘:: 물\n    순서:: 1\n    사용:: true\n    주간 목표:: 7\n');
+assert.deepStrictEqual(N.listRecords(hb, 'habit'), [{ id: 'hhhhhh', n: '물 마시기', i: '물', o: 1, on: true, g: 7, dates: null }]);
+const off = N.updateRecord(hb, 'habit', 'hhhhhh', { on: false, dates: '2026-11-23,2026-11-24', n: '물 2리터' });
+assert.deepStrictEqual(N.listRecords(off, 'habit')[0], { id: 'hhhhhh', n: '물 2리터', i: '물', o: 1, on: false, g: 7, dates: '2026-11-23,2026-11-24' });
+assert.throws(() => N.addRecord('', 'habit', { t: '제목 항목이 다르다' }, 'x'), /알 수 없는 항목/);
+assert.throws(() => N.addRecord('', 'habit', { i: '물' }, 'x'), /제목이 비었습니다/);
+// 할 일의 꺼진 표시(star:false)는 지금처럼 줄을 없앤다
+assert.ok(!N.updateRecord('- [ ] 일 ^a1\n    포트폴리오:: true\n', 'tasks', 'a1', { star: false }).includes('포트폴리오'));
+
 console.log('note.test.js 통과');
