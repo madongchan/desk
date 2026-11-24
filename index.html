@@ -2190,21 +2190,22 @@ function libMd(body,o){
     para.push(t);i++}
   flush();return out;
 }
-// 그림은 한 장씩 차례로 받아 온다(캡처는 크다). 받은 것은 화면을 다시 그리지 않고 그 자리만 바꾼다
-const libQ=[];let libBusy=false;
+// 그림은 세 장씩 받아 온다(한 장에 4초쯤 걸린다). 받은 것은 화면을 다시 그리지 않고 그 자리만 바꾼다
+const libQ=[];let libBusy=0;
 function libImgEl(name,o){
   const key=name.trim().split("/").pop().toLowerCase(),p=o.imgs.find(x=>x.split("/").pop().toLowerCase()===key);
   if(!p)return h("div",{class:"faint",style:"font-size:12px"},"(목록에 없는 그림: "+name+")");
   if(S.lib.img[p])return libImgNode(p);
-  if(!libQ.includes(p)){libQ.push(p);libPump()}
+  if(S.lib.img[p]==null&&!libQ.includes(p)){libQ.push(p);libPump()}
   return h("div",{class:"mdi wait","data-img":p},"그림을 불러오는 중… "+name);
 }
 function libImgNode(p){const v=S.lib.img[p],nm=p.split("/").pop();
   return v.startsWith("err:")?h("div",{class:"faint",style:"font-size:12px"},"그림을 읽지 못했습니다: "+nm+" ("+v.slice(4)+")"):h("img",{class:"mdi",src:v,alt:nm})}
 function libPump(){
-  if(libBusy||!libQ.length)return;libBusy=true;const p=libQ[0],L=S.lib;
+  if(libBusy>=3||!libQ.length)return;libBusy++;const p=libQ.shift(),L=S.lib;
+  L.img[p]=""; // 받는 중 표시. 같은 그림을 두 번 청하지 않는다
   api("workImg",{path:p}).then(r=>{L.img[p]="data:"+r.mime+";base64,"+r.b64}).catch(e=>{L.img[p]="err:"+e.message})
-    .finally(()=>{libQ.shift();libBusy=false;document.querySelectorAll("[data-img]").forEach(el=>{if(el.dataset.img===p)el.replaceWith(libImgNode(p))});libPump()});
+    .finally(()=>{libBusy--;if(S.lib===L)document.querySelectorAll("[data-img]").forEach(el=>{if(el.dataset.img===p)el.replaceWith(libImgNode(p))});libPump()}); // 그사이 화면을 떠났으면(S.lib가 새것) 버린다
 }
 
 function setupView(){

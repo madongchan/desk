@@ -188,7 +188,8 @@ function vault_(folder) {
 
 /**
  * 폴더 아래의 경로(슬래시)를 이름으로 따라가 파일을 찾는다.
- * 이름으로 찾아 내려가는 것은 느려서(실측 노트 하나에 5초) 한 번 찾은 파일의 번호를 6시간 기억한다.
+ * 한 번 찾은 파일의 번호를 6시간 기억해 다음에는 바로 연다.
+ * 실측(2026-11-24): 노트 하나에 4초쯤 걸리는데 대부분 Apps Script의 기본 시간(1.4초)과 파일 읽기라, 이 기억으로 줄어드는 폭은 작다.
  */
 function under_(base, rel) {
   const cache = CacheService.getScriptCache(), key = 'u:' + rel;
