@@ -17,7 +17,7 @@ function fakeFolder(name) {
     createFile: (n, t) => {
       let text = t;
       // getLastUpdated는 기본으로 오래전이다. 점검에서 "방금 고친 파일"을 흉내 낼 때만 바꿔 끼운다
-      const f = { getName: () => n, isTrashed: () => false, getLastUpdated: () => new Date(0), getBlob: () => ({ getDataAsString: () => text }), setContent: v => { text = v; } };
+      const f = { getName: () => n, isTrashed: () => false, getLastUpdated: () => new Date(0), getBlob: () => ({ getDataAsString: () => text, getBytes: () => Buffer.from(text) }), setContent: v => { text = v; } };
       files.push(f);
       return f;
     },
@@ -31,12 +31,13 @@ function diskFolder(dir) {
   fs.mkdirSync(dir, { recursive: true });
   const file = n => ({
     getName: () => n, isTrashed: () => false, getLastUpdated: () => fs.statSync(path.join(dir, n)).mtime,
-    getBlob: () => ({ getDataAsString: () => fs.readFileSync(path.join(dir, n), 'utf8') }),
+    getBlob: () => ({ getDataAsString: () => fs.readFileSync(path.join(dir, n), 'utf8'), getBytes: () => fs.readFileSync(path.join(dir, n)) }),
     setContent: v => fs.writeFileSync(path.join(dir, n), v),
   });
   const names = dirs => fs.readdirSync(dir, { withFileTypes: true }).filter(d => d.isDirectory() === dirs).map(d => d.name);
   return {
     getName: () => path.basename(dir),
+    getParents: () => iter([diskFolder(path.dirname(dir))]),
     getFiles: () => iter(names(false).map(file)),
     getFilesByName: n => iter(names(false).filter(x => x === n).map(file)),
     createFile: (n, t) => { fs.writeFileSync(path.join(dir, n), t); return file(n); },
@@ -68,6 +69,7 @@ function makeContext(root, props, files) {
   const lookups = [], cache = {};
   const top = fakeFolder('내 드라이브'), vault = top.createFolder('ObsidianFolder');
   root.getId = () => 'todo-id';
+  if (!root.getParents) root.getParents = () => iter([vault]);   // 메모리 폴더는 가짜 볼트 아래에 둔다
   vault._subs.push(root);
   if (files) Object.keys(files).forEach(id => vault._files.push(Object.assign({ getName: () => 'log.md', getId: () => id, isTrashed: () => false }, files[id])));
   // 가짜 지메일: 대화 두 개
@@ -96,7 +98,7 @@ function makeContext(root, props, files) {
     CacheService: { getScriptCache: () => ({ get: k => (k in cache ? cache[k] : null), put: (k, v) => { cache[k] = v; } }) },
     PropertiesService: { getScriptProperties: () => ({ getProperty: k => props[k] || null }) },
     LockService: { getScriptLock: () => ({ waitLock() {}, releaseLock() {} }) },
-    Utilities: { sleep: ms => { slept += ms; }, formatDate: d => new Date(d.getTime() + 9 * 3600e3).toISOString().slice(0, 10) },
+    Utilities: { base64Encode: b => Buffer.from(b).toString('base64'), sleep: ms => { slept += ms; }, formatDate: d => new Date(d.getTime() + 9 * 3600e3).toISOString().slice(0, 10) },
     CalendarApp: { getAllCalendars: () => { if (broken) throw new Error('캘린더 권한이 없습니다'); return [cal]; }, getDefaultCalendar: () => cal },
     Session: { getEffectiveUser: () => ({ getEmail: () => 'me@example.com' }) },
     ContentService: { createTextOutput: s => ({ text: s, setMimeType() { return this; } }), MimeType: { JSON: 'json' } },
@@ -104,7 +106,7 @@ function makeContext(root, props, files) {
   });
   const src = f => fs.readFileSync(path.join(__dirname, '..', 'apps-script', f), 'utf8');
   vm.runInContext(src('Note.gs') + '\n' + src('Code.gs') + '\nthis.doPost = doPost; this.selfCheck = selfCheck;', ctx);
-  return { ctx, slept: () => slept, created: () => created, breakCalendar: b => { broken = b; }, ownCalendar: b => { owned = b; }, breakMail: b => { mailBroken = b; }, searches: () => searches, lookups: () => lookups, top: top };
+  return { ctx, slept: () => slept, created: () => created, breakCalendar: b => { broken = b; }, ownCalendar: b => { owned = b; }, breakMail: b => { mailBroken = b; }, searches: () => searches, lookups: () => lookups, top: top, vault: vault };
 }
 
 module.exports = { fakeFolder, diskFolder, makeContext };

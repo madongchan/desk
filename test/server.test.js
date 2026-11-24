@@ -299,6 +299,24 @@ PROPS.LOG_FILE = 'ObsidianFolder/없는 파일.md';
 assert.match(post('worklog', {}).error, /찾을 수 없습니다/);
 delete PROPS.LOG_FILE;
 
+// 작업 화면: PC가 만든 목록을 주고, 목록에 적힌 노트와 그림만 읽어 준다. 볼트는 읽기만 한다
+assert.match(post('works', {}).error, /작업 목록이 없습니다/);
+const wk = g.vault.createFolder('entities').createFolder('게임');
+wk.createFile('저장 수정.md', '# 저장 수정\n![[구조.svg]]\n').setContent = () => { throw new Error('노트는 읽기만 한다'); };
+wk.createFolder('Docs').createFile('구조.svg', '<svg/>');
+wk.createFile('목록에 없는 노트.md', '비밀');
+const idx = root.createFile('작업 목록.json', JSON.stringify({ at: 'T', notes: [
+  { p: '게임', s: '', t: '저장 수정', d: '2026-11-20', path: 'entities/게임/저장 수정.md', sum: '요약', heads: [], imgs: ['entities/게임/Docs/구조.svg'], m: 1, z: 2 }] }));
+r = post('works', {});
+assert.deepStrictEqual([r.data.at, r.data.notes.length, r.data.notes[0].t, 'm' in r.data.notes[0]], ['T', 1, '저장 수정', false]);
+assert.strictEqual(post('workNote', { path: 'entities/게임/저장 수정.md' }).data.text, '# 저장 수정\n![[구조.svg]]\n');
+assert.match(post('workNote', { path: 'entities/게임/목록에 없는 노트.md' }).error, /목록에 없는/);
+assert.match(post('workNote', { path: '../desk/급여.md' }).error, /목록에 없는/);
+r = post('workImg', { path: 'entities/게임/Docs/구조.svg' });
+assert.deepStrictEqual([r.data.mime, Buffer.from(r.data.b64, 'base64').toString()], ['image/svg+xml', '<svg/>']);
+assert.match(post('workImg', { path: 'entities/게임/저장 수정.md' }).error, /목록에 없는/);       // 노트를 그림으로 읽을 수 없다
+root._files.splice(root._files.indexOf(idx), 1);
+
 // 일정 추가: 입력을 검사한 뒤 캘린더에 쓴다
 assert.strictEqual(post('eventAdd', { title: '회의', date: '11/25' }).ok, false);
 assert.strictEqual(post('eventAdd', { title: ' ', date: today }).ok, false);

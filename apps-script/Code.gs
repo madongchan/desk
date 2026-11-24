@@ -13,7 +13,8 @@
  */
 
 const TZ = 'Asia/Seoul';
-const VERSION = '2026-11-24p';
+const VERSION = '2026-11-24q';
+const WORK_FILE = '작업 목록.json';   // PC의 tools/sync-vault.js가 쓰는 파일. 서버는 읽기만 한다
 const GIT_FILE = '작업 내역.md';   // PC의 tools/sync-git.js가 쓰는 파일. 서버는 읽기만 한다
 // PC에서 고친 지 이만큼 안 지난 파일에는 읽으면서 번호를 붙여 쓰지 않는다. 옵시디언이 아직 쓰는 중일 수 있다
 const FRESH_MS = 2 * 60 * 1000;
@@ -169,6 +170,35 @@ function one_(text, kind, id) {
   return rows_(text, kind).filter(function (r) { return r.id === id; })[0];
 }
 
+/** PC가 만든 작업 목록을 읽는다. */
+function workIndex_(folder) {
+  const text = readText_(folder, WORK_FILE);
+  if (!text) throw new Error('작업 목록이 없습니다. PC에서 tools/sync-vault.js를 돌려 주세요');
+  const idx = JSON.parse(text);
+  if (!idx || !Array.isArray(idx.notes)) throw new Error('작업 목록 파일의 모양이 잘못되었습니다');
+  return idx;
+}
+
+/** 볼트 폴더. 데이터 폴더(desk)의 바로 위다. */
+function vault_(folder) {
+  const it = folder.getParents();
+  if (!it.hasNext()) throw new Error('데이터 폴더의 위 폴더(볼트)를 찾을 수 없습니다');
+  return it.next();
+}
+
+/**
+ * 폴더 아래의 경로(슬래시)를 이름으로 따라가 파일을 찾는다.
+ * ponytail: 부를 때마다 단계 수만큼 드라이브를 찾는다(노트 하나에 1초쯤). 느리면 찾은 번호를 CacheService에 기억시킨다.
+ */
+function under_(base, rel) {
+  const parts = rel.split('/').filter(function (s) { return s; });
+  let at = base;
+  for (let i = 0; i < parts.length; i++) {
+    at = onlyOne_(i === parts.length - 1 ? at.getFilesByName(parts[i]) : at.getFoldersByName(parts[i]), parts[i]);
+  }
+  return at;
+}
+
 function checkKind_(kind) {
   if (!Object.prototype.hasOwnProperty.call(KINDS, kind)) throw new Error('다룰 수 없는 종류입니다: ' + kind);
 }
@@ -300,6 +330,32 @@ const ACTIONS = {
    * desk 폴더 밖의 파일이라 스크립트 속성 LOG_FILE에 그 파일 하나의 ID를 따로 적어야 한다.
    * 작업 내용이 들어 있으므로 load에는 넣지 않는다. 화면이 열 때만 받아 가고 기기에 저장하지 않는다.
    */
+  /** 작업 화면의 목록. PC의 tools/sync-vault.js가 볼트를 훑어 만든 파일을 그대로 준다. */
+  works: function (a, folder) {
+    const idx = workIndex_(folder);
+    return { at: idx.at, notes: idx.notes.map(function (n) { const o = Object.assign({}, n); delete o.m; delete o.z; return o; }) };   // m, z는 PC 프로그램만 쓰는 값
+  },
+
+  /** 노트 하나의 글. 목록에 적힌 경로만 읽는다(드라이브의 다른 파일을 읽는 길이 되지 않게). */
+  workNote: function (a, folder) {
+    const path = String(a.path || '');
+    if (!workIndex_(folder).notes.some(function (n) { return n.path === path; })) throw new Error('작업 목록에 없는 노트입니다');
+    const text = under_(vault_(folder), path).getBlob().getDataAsString('UTF-8');
+    return { text: text.length > 200000 ? text.slice(0, 200000) + '\n\n…(너무 길어 여기까지만 보여 줍니다)' : text };
+  },
+
+  /** 노트에 넣어 둔 그림 하나. 목록의 어느 노트가 쓰는 그림일 때만 읽는다. */
+  workImg: function (a, folder) {
+    const path = String(a.path || '');
+    if (!workIndex_(folder).notes.some(function (n) { return (n.imgs || []).indexOf(path) >= 0; })) throw new Error('작업 목록에 없는 그림입니다');
+    const ext = path.split('.').pop().toLowerCase();
+    const mime = { svg: 'image/svg+xml', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp' }[ext];
+    if (!mime) throw new Error('그림 파일이 아닙니다');
+    const bytes = under_(vault_(folder), path).getBlob().getBytes();
+    if (bytes.length > 8 * 1024 * 1024) throw new Error('그림이 너무 큽니다(8MB 초과)');
+    return { mime: mime, b64: Utilities.base64Encode(bytes) };
+  },
+
   worklog: function () {
     const id = PropertiesService.getScriptProperties().getProperty('LOG_FILE');
     if (!id) throw new Error('서버에 LOG_FILE(작업 로그 파일 위치)이 설정되지 않았습니다');

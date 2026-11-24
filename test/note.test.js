@@ -153,4 +153,18 @@ assert.deepStrictEqual(cm.map(c => [c.d, c.p, c.y, c.t]), [
 assert.deepStrictEqual([cm[0].id, cm[0].s, cm[0].git], ['git-a1b2c3d', '완료', true]);
 assert.deepStrictEqual(N.parseCommits(''), []);
 
+/* ── 볼트 목록 만들기(PC 프로그램): 노트 글에서 프로젝트, 시스템, 날짜, 요약, 그림 위치를 뽑는다 ── */
+const { describe } = require('../tools/sync-vault.js');
+const IMGS = { '구조.svg': 'entities/게임/저장/Docs/구조.svg', '화면.png': 'entities/게임/저장/화면.png' };
+let nt = describe('entities/게임/저장/2026-11-20 게임 — 저장 순서 수정.md',
+  '---\ntags:\n  - x\ndate: 2026-11-01\n---\n# 저장 순서 수정\n관련: [[다른 노트]]\n![[구조.svg]]\n\n저장이 뒤바뀌던 것을 고쳤다.\n\n## 원인\n글\n## 수정\n![[화면.png|400]]\n![[없는 그림.png]]\n![[구조.svg]]\n', IMGS);
+assert.deepStrictEqual([nt.p, nt.s, nt.t, nt.d], ['게임', '저장', '저장 순서 수정', '2026-11-20']);   // 날짜는 파일 이름이 먼저다
+assert.strictEqual(nt.sum, '저장이 뒤바뀌던 것을 고쳤다.');
+assert.deepStrictEqual(nt.heads, ['원인', '수정']);
+assert.deepStrictEqual(nt.imgs, ['entities/게임/저장/Docs/구조.svg', 'entities/게임/저장/화면.png']);     // 못 찾은 그림과 겹친 그림은 뺀다
+nt = describe('career/2026-10-01 게임 — 종료 멈춤.md', '---\nproject: 게임\n---\n한 줄 요약이다.\n\n## Problem\n', {});
+assert.deepStrictEqual([nt.p, nt.s, nt.t, nt.d, nt.sum], ['게임', 'career', '종료 멈춤', '2026-10-01', '한 줄 요약이다.']);
+nt = describe('entities/도구/메모 (2026-09-02).md', '글\n', {});
+assert.deepStrictEqual([nt.p, nt.s, nt.t, nt.d], ['도구', '', '메모 (2026-09-02)', '2026-09-02']);
+
 console.log('note.test.js 통과');
