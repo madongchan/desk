@@ -5,9 +5,9 @@ const { makeContext, fakeFolder } = require('./fake-google');
 
 const PASS = 'correct-horse-battery-staple';
 const root = fakeFolder('todo');
-const PROPS = { PASS: PASS, TODO_FOLDER: 'folder-id' };
+const PROPS = { PASS: PASS, TODO_FOLDER: 'folderid0123456789abcdef' };
 const logFile = { getBlob: () => ({ getDataAsString: () => '## 2026-11-23 어떤 작업\n고쳤다. 사용자 확인 대기.\n\n## 2026-11-24 다른 작업\n끝냈다.\n' }), setContent() { throw new Error('작업 로그는 읽기만 한다'); } };
-const g = makeContext(root, PROPS, { 'log-id': logFile });
+const g = makeContext(root, PROPS, { 'logfileid0123456789abcd': logFile });
 const ctx = g.ctx;
 
 const post = (action, args, pass) =>
@@ -247,13 +247,38 @@ g.breakMail(false);
 
 // 작업 기록: 옵시디언 작업 로그를 읽기만 한다. 평소 읽기(load)에는 넣지 않는다
 assert.match(post('worklog', {}).error, /LOG_FILE/);                               // 설정 전에는 안내만 한다
-PROPS.LOG_FILE = 'log-id';
+PROPS.LOG_FILE = 'logfileid0123456789abcd';
 r = post('worklog', {});
 assert.strictEqual(r.ok, true, r.error);
 assert.deepStrictEqual(r.data.entries.map(e => [e.d, e.t, e.open]), [['2026-11-24', '다른 작업', []], ['2026-11-23', '어떤 작업', ['사용자 확인 대기.']]]);
 assert.ok(!JSON.stringify(post('load', {}).data).includes('어떤 작업'));
 PROPS.LOG_FILE = 'nope';
 assert.strictEqual(post('worklog', {}).ok, false);
+delete PROPS.LOG_FILE;
+
+// 스크립트 속성에 번호 대신 경로를 적어도 된다. PC에서 보이는 경로(Z:\\...)를 그대로 적어도 된다
+const before2 = JSON.stringify(post('load', {}).data.tasks);
+['ObsidianFolder/todo', 'Z:\\ObsidianFolder\\todo', ' /ObsidianFolder/todo/ '].forEach(p => {
+  PROPS.TODO_FOLDER = p;
+  r = post('load', {});
+  assert.strictEqual(r.ok, true, p + ' -> ' + r.error);
+  assert.strictEqual(JSON.stringify(r.data.tasks), before2, p);
+});
+// 한 번 찾은 경로는 기억해 두고 다음부터는 번호로 바로 연다(이름으로 찾아 들어가는 것은 느리다)
+const n0 = g.lookups().filter(x => x === 'root').length;
+post('load', {}); post('load', {});
+assert.strictEqual(g.lookups().filter(x => x === 'root').length, n0);
+PROPS.TODO_FOLDER = 'ObsidianFolder/없는 폴더';
+assert.match(post('load', {}).error, /찾을 수 없습니다: 없는 폴더/);
+g.top.createFolder('ObsidianFolder');                                             // 같은 이름 폴더가 둘이면 고르지 않는다
+PROPS.TODO_FOLDER = 'ObsidianFolder/todo2';
+assert.match(post('load', {}).error, /둘 이상/);
+g.top._subs.pop();
+PROPS.TODO_FOLDER = 'folderid0123456789abcdef';
+PROPS.LOG_FILE = 'Z:\\ObsidianFolder\\log.md';
+assert.deepStrictEqual(post('worklog', {}).data.entries.map(e => e.t), ['다른 작업', '어떤 작업']);
+PROPS.LOG_FILE = 'ObsidianFolder/없는 파일.md';
+assert.match(post('worklog', {}).error, /찾을 수 없습니다/);
 delete PROPS.LOG_FILE;
 
 // 일정 추가: 입력을 검사한 뒤 캘린더에 쓴다

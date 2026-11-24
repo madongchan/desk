@@ -64,6 +64,12 @@ function makeContext(root, props, files) {
     createAllDayEvent: (t, d) => created.push(['allDay', t, d.toISOString()]),
     createEvent: (t, s, e) => created.push(['timed', t, s.toISOString(), e.toISOString()]),
   };
+  // 가짜 내 드라이브: 맨 위 > ObsidianFolder > (점검의 todo 폴더, log.md)
+  const lookups = [], cache = {};
+  const top = fakeFolder('내 드라이브'), vault = top.createFolder('ObsidianFolder');
+  root.getId = () => 'todo-id';
+  vault._subs.push(root);
+  if (files) Object.keys(files).forEach(id => vault._files.push(Object.assign({ getName: () => 'log.md', getId: () => id, isTrashed: () => false }, files[id])));
   // 가짜 지메일: 대화 두 개
   let mailBroken = false;
   const searches = [];
@@ -84,7 +90,10 @@ function makeContext(root, props, files) {
       getThreadById: id => threads.find(t => t.getId() === id) || null,
     },
     console,
-    DriveApp: { getFolderById: () => root, getFileById: id => { if (!files || !files[id]) throw new Error('파일을 찾을 수 없습니다'); return files[id]; } },
+    // 번호로 찾기와, 내 드라이브 맨 위(getRootFolder)에서 이름으로 찾아 들어가기 둘 다 흉내 낸다
+    DriveApp: { getFolderById: id => { lookups.push('id:' + id); return root; }, getRootFolder: () => { lookups.push('root'); return top; },
+      getFileById: id => { if (!files || !files[id]) throw new Error('파일을 찾을 수 없습니다'); return files[id]; } },
+    CacheService: { getScriptCache: () => ({ get: k => (k in cache ? cache[k] : null), put: (k, v) => { cache[k] = v; } }) },
     PropertiesService: { getScriptProperties: () => ({ getProperty: k => props[k] || null }) },
     LockService: { getScriptLock: () => ({ waitLock() {}, releaseLock() {} }) },
     Utilities: { sleep: ms => { slept += ms; }, formatDate: d => new Date(d.getTime() + 9 * 3600e3).toISOString().slice(0, 10) },
@@ -95,7 +104,7 @@ function makeContext(root, props, files) {
   });
   const src = f => fs.readFileSync(path.join(__dirname, '..', 'apps-script', f), 'utf8');
   vm.runInContext(src('Note.gs') + '\n' + src('Code.gs') + '\nthis.doPost = doPost; this.selfCheck = selfCheck;', ctx);
-  return { ctx, slept: () => slept, created: () => created, breakCalendar: b => { broken = b; }, breakMail: b => { mailBroken = b; }, searches: () => searches };
+  return { ctx, slept: () => slept, created: () => created, breakCalendar: b => { broken = b; }, breakMail: b => { mailBroken = b; }, searches: () => searches, lookups: () => lookups, top: top };
 }
 
 module.exports = { fakeFolder, diskFolder, makeContext };

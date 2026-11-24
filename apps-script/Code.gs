@@ -7,13 +7,13 @@
  *
  * 설정(처음 1번) — 자세한 순서는 README.md
  *   스크립트 속성  PASS        = 비밀번호(16글자 이상)
- *                  TODO_FOLDER = 볼트 todo 폴더의 드라이브 ID
- *                  LOG_FILE    = (선택) 작업 로그 log.md 파일의 드라이브 ID
+ *                  TODO_FOLDER = 볼트 todo 폴더의 위치. 경로(Z:\ObsidianFolder\todo)나 드라이브 번호
+ *                  LOG_FILE    = (선택) 작업 로그 파일의 위치. 경로(Z:\ObsidianFolder\log.md)나 드라이브 번호
  *   배포 → 웹 앱 / 실행: 나 / 액세스: 모든 사용자
  */
 
 const TZ = 'Asia/Seoul';
-const VERSION = '2026-11-24i';
+const VERSION = '2026-11-24j';
 // PC에서 고친 지 이만큼 안 지난 파일에는 읽으면서 번호를 붙여 쓰지 않는다. 옵시디언이 아직 쓰는 중일 수 있다
 const FRESH_MS = 2 * 60 * 1000;
 const TRASH = '휴지통.md';
@@ -58,8 +58,46 @@ function checkPass_(pass) {
 
 function todoFolder_() {
   const id = PropertiesService.getScriptProperties().getProperty('TODO_FOLDER');
-  if (!id) throw new Error('서버에 TODO_FOLDER(todo 폴더 ID)가 설정되지 않았습니다');
-  return DriveApp.getFolderById(id);
+  if (!id) throw new Error('서버에 TODO_FOLDER(todo 폴더 위치)가 설정되지 않았습니다');
+  return locate_(id, false);
+}
+
+/**
+ * 스크립트 속성에 적힌 위치를 드라이브에서 찾는다. 두 가지로 적을 수 있다.
+ *   번호: 드라이브 주소에 보이는 긴 글자
+ *   경로: 내 드라이브 맨 위부터의 이름. ObsidianFolder/todo. PC에서 보이는 Z:\ObsidianFolder\todo를 그대로 적어도 된다
+ * 구글 서버는 PC의 드라이브 글자(Z:)를 모르므로 떼어 내고, 내 드라이브 맨 위에서 이름으로 찾아 들어간다.
+ * 이름으로 찾는 것은 느려서 한 번 찾은 번호를 6시간 기억한다.
+ */
+function locate_(value, wantFile) {
+  const v = String(value).trim();
+  const open = function (id) { return wantFile ? DriveApp.getFileById(id) : DriveApp.getFolderById(id); };
+  if (/^[A-Za-z0-9_-]{15,}$/.test(v)) return open(v);
+  const cache = CacheService.getScriptCache(), key = 'loc:' + (wantFile ? 'f:' : 'd:') + v;
+  const known = cache.get(key);
+  if (known) { try { return open(known); } catch (err) { /* 옮겨졌거나 지워졌으면 다시 찾는다 */ } }
+  const parts = v.replace(/^[A-Za-z]:/, '').split(/[\\/]+/).map(function (s) { return s.trim(); }).filter(function (s) { return s; });
+  if (!parts.length) throw new Error('위치가 비어 있습니다');
+  let at = DriveApp.getRootFolder();
+  for (let i = 0; i < parts.length; i++) {
+    const last = i === parts.length - 1;
+    at = onlyOne_(wantFile && last ? at.getFilesByName(parts[i]) : at.getFoldersByName(parts[i]), parts[i]);
+  }
+  cache.put(key, at.getId(), 21600);
+  return at;
+}
+
+/** 그 이름이 정확히 하나일 때만 돌려준다. 없거나 둘 이상이면 서버가 고르지 않고 멈춘다. */
+function onlyOne_(it, name) {
+  let found = null;
+  while (it.hasNext()) {
+    const x = it.next();
+    if (x.isTrashed && x.isTrashed()) continue;
+    if (found) throw new Error('드라이브에 같은 이름이 둘 이상입니다: ' + name);
+    found = x;
+  }
+  if (!found) throw new Error('드라이브에서 찾을 수 없습니다: ' + name);
+  return found;
 }
 
 function ymd_(d) { return Utilities.formatDate(d, TZ, 'yyyy-MM-dd'); }
@@ -257,8 +295,8 @@ const ACTIONS = {
    */
   worklog: function () {
     const id = PropertiesService.getScriptProperties().getProperty('LOG_FILE');
-    if (!id) throw new Error('서버에 LOG_FILE(작업 로그 파일 ID)이 설정되지 않았습니다');
-    const text = DriveApp.getFileById(id).getBlob().getDataAsString('UTF-8');
+    if (!id) throw new Error('서버에 LOG_FILE(작업 로그 파일 위치)이 설정되지 않았습니다');
+    const text = locate_(id, true).getBlob().getDataAsString('UTF-8');
     return { entries: parseLog(text, 80), at: new Date().toISOString() };
   },
 
@@ -454,7 +492,7 @@ function stampDone_(kind, fields) {
 /** 연결 확인: 폴더 이름과 일정 개수를 찍는다. 처음 실행하면 드라이브, 캘린더 권한을 묻는다. */
 function testConnection() {
   const today = ymd_(new Date());
-  Logger.log('todo 폴더: ' + todoFolder_().getName());
+  Logger.log('todo 폴더: ' + todoFolder_().getName() + ' (번호 ' + todoFolder_().getId() + ')');
   Logger.log('앞으로 7일 일정: ' + calendarEvents_(today, addDays_(today, 7)).length + '개');
 }
 
