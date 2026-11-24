@@ -590,7 +590,7 @@ tr.cur td{background:rgba(10,132,255,.1)}
 .mrow span{font-size:11.5px;color:var(--fg3)}
 
 /* desk: 작업 화면 */
-.lrow{display:block;width:100%;text-align:left;border:0;border-top:.5px solid var(--line);background:transparent;color:inherit;padding:9px 4px;cursor:pointer;border-radius:0}
+.lrow{display:block;width:100%;max-width:100%;overflow:hidden;text-align:left;border:0;border-top:.5px solid var(--line);background:transparent;color:inherit;padding:9px 4px;cursor:pointer;border-radius:0}
 .lrow:hover{background:rgba(255,255,255,.04)}
 .lrow b{font-weight:600;font-size:13.5px}
 .lrow small{display:block;color:var(--fg3);font-size:11.5px;margin-top:2px}
@@ -2131,7 +2131,7 @@ function viewLib(){
       h("span",null,k),h("span",{class:"tr"},h("i",{style:"width:"+(v/mx*100)+"%;background:"+stageCol(k)})),h("b",null,v)))),
     h("div",{class:"faint",style:"font-size:12px"},"노트의 절 제목(「원인」, 「결정 과정」, 「확인」, 「남은 문제」 등)으로 센 것입니다. 적지 않은 것은 세지 않습니다."));
   const listC=card("작업 노트",{icon:"news",count:list.length+"건"},
-    list.length?h("div",null,list.slice(0,L.n).map(x=>{const d=x.imgs.filter(p=>!isCap(p)).length,c=x.imgs.length-d,sg=[...new Set(x.heads.map(stageOf).filter(Boolean))];
+    list.length?h("div",{style:"min-width:0;overflow:hidden"},list.slice(0,L.n).map(x=>{const d=x.imgs.filter(p=>!isCap(p)).length,c=x.imgs.length-d,sg=[...new Set(x.heads.map(stageOf).filter(Boolean))];
       return h("button",{class:"lrow",onclick:()=>{L.open=x.path;render();$("#scroll").scrollTop=0}},h("b",null,x.t),
         h("small",null,[x.d,x.p,x.s,d?"다이어그램 "+d:null,c?"캡처 "+c:null].filter(Boolean).join(" · ")),
         x.sum?h("span",{class:"s"},mdPlain(x.sum)):null,
