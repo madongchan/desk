@@ -202,6 +202,21 @@ assert.strictEqual(post('leaveSet', { y: '올해', total: 15 }).ok, false);
 assert.strictEqual(post('leaveSet', { y: yy, total: -1 }).ok, false);
 assert.strictEqual(post('leaveSet', { y: yy, total: 400 }).ok, false);
 
+// 커리어: 지원처와 지원 서류
+r = post('add', { kind: 'job', fields: { n: '어느 게임 회사', role: '클라이언트', st: '관심', d: today, post: 'Unity C# 클라이언트 개발\n우대: Steam 출시 경험' } });
+assert.strictEqual(r.ok, true, r.error);
+const jid = r.data.id;
+assert.deepStrictEqual([r.data.n, r.data.st, r.data.post], ['어느 게임 회사', '관심', 'Unity C# 클라이언트 개발\n우대: Steam 출시 경험']);
+r = post('add', { kind: 'doc', fields: { t: '이력서', kind: '이력서', st: '미착수', job: [jid], o: 1 } });
+assert.deepStrictEqual([r.data.t, r.data.job, r.data.o], ['이력서', [jid], 1]);
+post('add', { kind: 'doc', fields: { t: '공통 포트폴리오', kind: '포트폴리오', st: '초안', job: [] } });
+assert.strictEqual(post('update', { kind: 'job', id: jid, fields: { st: '서류 준비', chk: '0,1' } }).data.st, '서류 준비');
+r = post('load', {});
+assert.deepStrictEqual(r.data.jobs.map(j => [j.n, j.st, j.chk]), [['어느 게임 회사', '서류 준비', '0,1']]);
+assert.deepStrictEqual(r.data.docs.map(d => [d.t, d.job]), [['이력서', [jid]], ['공통 포트폴리오', []]]);
+assert.deepStrictEqual(post('trash', { kind: 'job', id: jid }).data, { id: jid });
+assert.deepStrictEqual(post('load', {}).data.jobs, []);
+
 // 일정 추가: 입력을 검사한 뒤 캘린더에 쓴다
 assert.strictEqual(post('eventAdd', { title: '회의', date: '11/25' }).ok, false);
 assert.strictEqual(post('eventAdd', { title: ' ', date: today }).ok, false);

@@ -118,4 +118,15 @@ assert.throws(() => N.addRecord('', 'habit', { i: '물' }, 'x'), /제목이 비�
 // 할 일의 꺼진 표시(star:false)는 지금처럼 줄을 없앤다
 assert.ok(!N.updateRecord('- [ ] 일 ^a1\n    포트폴리오:: true\n', 'tasks', 'a1', { star: false }).includes('포트폴리오'));
 
+/* ── 목록 값: 지원 서류가 어느 지원처의 것인지 번호 목록으로 든다 ── */
+const dc = N.addRecord('', 'doc', { t: '자기소개서', kind: '자기소개서', st: '미착수', job: ['abc123', 'def456'], lim: 800, o: 2 }, 'dddddd');
+assert.ok(dc.includes('    지원처:: abc123,def456\n'));
+assert.deepStrictEqual(N.listRecords(dc, 'doc')[0].job, ['abc123', 'def456']);
+assert.strictEqual(N.listRecords(dc, 'doc')[0].lim, 800);
+const dc0 = N.updateRecord(dc, 'doc', 'dddddd', { job: [] });
+assert.ok(!dc0.includes('지원처::'));
+assert.deepStrictEqual(N.listRecords(dc0, 'doc')[0].job, []);
+assert.throws(() => N.updateRecord(dc, 'doc', 'dddddd', { job: ['a b', '\n- [ ] 끼워넣기'] }), /값 형식/);
+assert.throws(() => N.updateRecord(dc, 'doc', 'dddddd', { kind: ['목록이 아닌 항목'] }), /값 형식/);
+
 console.log('note.test.js 통과');

@@ -28,6 +28,11 @@ const KINDS = {
   // 급여: 달마다 한 줄. 평소 읽기에는 넣지 않고 따로 요청할 때만 준다
   pay: { file: '급여.md', check: false, title: 'm', num: ['g', 'ded', 'net'],
     keys: { d: '지급일', g: '지급총액', ded: '공제총액', net: '실수령액', note: '비고' } },
+  // 커리어: 지원처와 지원 서류. list: 번호 목록으로 드는 항목(쉼표로 이어 한 줄에 적는다)
+  job: { file: '지원처.md', check: false, title: 'n',
+    keys: { role: '직무', st: '단계', d: '마감', link: '링크', memo: '메모', chk: '진행 체크', post: '공고 내용' } },
+  doc: { file: '지원 서류.md', check: false, num: ['lim', 'o'], list: ['job'],
+    keys: { job: '지원처', kind: '종류', st: '상태', lim: '글자 제한', o: '순서', body: '내용', memo: '메모', file: '파일' } },
 };
 const DONE = '완료', TODO = '시작 전';
 const MAX_TEXT = 20000;
@@ -101,6 +106,9 @@ function decode_(s) {
 const isDone_ = function (mark) { return mark === 'x' || mark === 'X'; };
 const blank_ = function (v) { return v === null || v === undefined || v === '' || v === false; };
 const titleKey_ = function (K) { return K.title || 't'; };
+const isList_ = function (K, key) { return !!K.list && K.list.indexOf(key) >= 0; };
+/** 목록 값은 쉼표로 이어 한 줄 글자로 적는다. */
+const flat_ = function (v) { return Array.isArray(v) ? v.join(',') : v; };
 /** 이 값이면 줄을 적지 않는가. 꺼짐을 적어야 하는 항목의 false는 적는다. */
 const omit_ = function (K, key, v) { return blank_(v) && !(v === false && K.keepFalse && K.keepFalse.indexOf(key) >= 0); };
 
@@ -134,7 +142,9 @@ function checkFields_(K, fields) {
   Object.keys(fields || {}).forEach(function (key) {
     if (key !== titleKey_(K) && !has_(K.keys, key)) throw new Error('알 수 없는 항목입니다: ' + key);
     const v = fields[key];
-    const ok = v === null || typeof v === 'boolean' || (typeof v === 'number' && isFinite(v)) || (typeof v === 'string' && v.length <= MAX_TEXT);
+    // 목록은 번호(영문, 숫자, -)만 받는다. 쉼표나 줄바꿈이 섞이면 다른 값으로 읽히기 때문이다
+    const listOk = isList_(K, key) && Array.isArray(v) && v.length <= 50 && v.every(function (x) { return typeof x === 'string' && /^[A-Za-z0-9-]{1,40}$/.test(x); });
+    const ok = listOk || v === null || typeof v === 'boolean' || (typeof v === 'number' && isFinite(v)) || (typeof v === 'string' && v.length <= MAX_TEXT);
     if (!ok) throw new Error('값 형식이 잘못되었습니다: ' + key);
   });
 }
@@ -153,6 +163,7 @@ function listRecords(text, kind) {
     for (const key in K.keys) {
       let v = has_(b.fields, key) ? b.fields[key] : null;
       if (K.num && K.num.indexOf(key) >= 0 && typeof v === 'string' && v.trim() !== '' && isFinite(Number(v))) v = Number(v);
+      if (isList_(K, key)) v = v ? String(v).split(',').filter(function (x) { return x; }) : [];
       o[key] = v;
     }
     return o;
@@ -183,7 +194,8 @@ function addRecord(text, kind, fields, id) {
   const eol = splitLines_(text).eol;
   const block = [itemLine_(K.check && fields.s === DONE ? 'x' : ' ', title, id)];
   for (const key in K.keys) {
-    if (!omit_(K, key, fields[key]) && !impliedStatus_(K, key, fields[key])) block.push(fieldLine_(K, key, fields[key]));
+    const v = flat_(fields[key]);
+    if (!omit_(K, key, v) && !impliedStatus_(K, key, v)) block.push(fieldLine_(K, key, v));
   }
   return text + (text && !/\n$/.test(text) ? eol : '') + block.join(eol) + eol;
 }
@@ -202,7 +214,7 @@ function updateRecord(text, kind, id, fields) {
   let mark = f.mark, title = f.title;
 
   Object.keys(fields).forEach(function (key) {
-    const v = fields[key];
+    const v = flat_(fields[key]);
     if (key === titleKey_(K)) {
       title = cleanTitle(v);
       if (!title) throw new Error('제목이 비었습니다');

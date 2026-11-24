@@ -12,7 +12,7 @@
  */
 
 const TZ = 'Asia/Seoul';
-const VERSION = '2026-11-24f';
+const VERSION = '2026-11-24g';
 // PC에서 고친 지 이만큼 안 지난 파일에는 읽으면서 번호를 붙여 쓰지 않는다. 옵시디언이 아직 쓰는 중일 수 있다
 const FRESH_MS = 2 * 60 * 1000;
 const TRASH = '휴지통.md';
@@ -170,7 +170,7 @@ const ACTIONS = {
     const since = addDays_(today, -60);
     const texts = withLock_(function () {
       const t = {};
-      ['tasks', 'memo', 'habit', 'att', 'leave'].forEach(function (k) { t[k] = open_(folder, k); });
+      ['tasks', 'memo', 'habit', 'att', 'leave', 'job', 'doc'].forEach(function (k) { t[k] = open_(folder, k); });
       return t;
     });
     const work = attendance_(rows_(texts.att, 'att'), rows_(texts.leave, 'leave'), today);
@@ -187,7 +187,8 @@ const ACTIONS = {
       // 화면이 목록으로 기대하는 칸들. 이 서버는 다루지 않아 비워 둔다
       habits: rows_(texts.habit, 'habit'),
       att: work.att, months: work.months, leave: work.leave,
-      jobs: [], news: [], logs: [], sorries: [], scans: [],
+      jobs: rows_(texts.job, 'job'), docs: rows_(texts.doc, 'doc'),
+      news: [], logs: [], sorries: [], scans: [],
     };
     // 캘린더를 못 읽어도 할 일은 보여야 한다
     try { out.events = calendarEvents_(addDays_(today, -45), addDays_(today, 90)); } catch (err) { out.calError = String(err && err.message || err); }
