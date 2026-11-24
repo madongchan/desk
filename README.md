@@ -70,17 +70,31 @@ node test/dev-server.js
 ## 배포 순서 (처음 한 번)
 
 1. **todo 폴더 만들기.** 구글 드라이브에 있는 옵시디언 볼트 안에 `todo` 폴더를 만든다.
-2. **Apps Script 프로젝트 만들기.** 볼트가 있는 구글 계정으로 https://script.google.com 에서 「새 프로젝트」를 만든다.
-3. **코드 붙여 넣기.** 기본 `Code.gs`의 내용을 지우고 이 저장소의 `apps-script/Code.gs`를 붙여 넣는다. 파일 `+` → 스크립트로 `Note`를 만들어 `apps-script/Note.gs`를 붙여 넣는다.
-4. **스크립트 속성 넣기.** 프로젝트 설정(톱니바퀴) → 스크립트 속성에 둘을 추가한다.
+2. **clasp 준비.** 구글의 명령줄 도구 `clasp`으로 코드를 올린다(Node 20 이상). 볼트가 있는 구글 계정으로 로그인하고, https://script.google.com/home/usersettings 에서 「Google Apps Script API」를 켠다.
+   ```
+   npm install -g @google/clasp
+   clasp login
+   ```
+3. **프로젝트 만들고 코드 올리기.** `create-script`가 `apps-script/appsscript.json`을 구글 기본값으로 덮어쓰므로, 만든 뒤 `git checkout -- apps-script/appsscript.json`으로 되돌리고 올린다. 이 파일에 시간대(서울)와 웹 앱 설정(실행: 나, 액세스: 모든 사용자)이 적혀 있어서 구글 화면에서 따로 고를 것이 없다.
+   ```
+   clasp create-script --type standalone --title desk --rootDir apps-script
+   git checkout -- apps-script/appsscript.json
+   clasp push --force
+   ```
+4. **스크립트 속성 넣기.** `clasp open-script`로 편집기를 열고 프로젝트 설정(톱니바퀴) → 스크립트 속성에 둘을 추가한다.
    - `PASS` = 비밀번호. 16글자 이상
    - `TODO_FOLDER` = 1번 폴더의 위치. 내 드라이브 맨 위부터의 경로를 적는다(예: `볼트 폴더/todo`). PC에서 드라이브가 `Z:`로 보인다면 `Z:\볼트 폴더\todo`처럼 PC에서 보이는 경로를 그대로 적어도 된다(서버가 드라이브 글자를 떼고 찾는다). 드라이브 주소에 보이는 폴더 번호를 적어도 된다
    - `LOG_FILE` = (선택) 작업 기록 화면을 쓸 때, 볼트의 `log.md` 위치. 같은 방식으로 경로나 번호를 적는다
-
-   같은 화면에서 시간대가 서울(GMT+09:00)인지 확인한다. 다르면 종일 일정이 하루 밀린다.
 5. **점검 실행.** 편집기 위쪽 함수 목록에서 `selfCheck`를 골라 실행한다. 처음에는 드라이브, 캘린더, 지메일 권한을 묻는다. 실행 로그 끝에 `점검 통과`가 나오면 된다. `todo/_점검/` 폴더 안에서만 돌고 실제 노트는 건드리지 않는다.
-6. **웹 앱 배포.** 배포 → 새 배포 → 유형: 웹 앱 / 실행: 나 / 액세스 권한: 모든 사용자 → 배포. 나온 주소(`…/exec`)를 `config.js`의 `url`에 넣는다.
+6. **웹 앱 배포.** `clasp create-deployment`가 배포 번호를 준다. `https://script.google.com/macros/s/<배포 번호>/exec`를 `config.js`의 `url`에 넣는다.
 7. **화면 올리기.** 이 저장소를 GitHub에 올리고 Pages를 켠다.
 8. **휴대폰에서 열기.** Pages 주소를 열어 비밀번호를 넣고, 브라우저 메뉴에서 「홈 화면에 추가」를 누른다.
 
-코드를 고친 뒤에는 Apps Script에 다시 붙여 넣고 배포 → 배포 관리 → 수정(연필) → 버전: 새 버전으로 올려야 반영된다. 주소는 그대로다.
+코드를 고친 뒤에는 두 줄로 반영한다. 주소는 그대로다.
+
+```
+clasp push --force
+clasp update-deployment <배포 번호>
+```
+
+`.clasp.json`(내 프로젝트 번호)은 저장소에 올리지 않는다.

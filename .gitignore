@@ -2,3 +2,4 @@
 .remember/
 .claude/
 node_modules/
+.clasp.json
