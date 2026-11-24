@@ -8,11 +8,12 @@
  * 설정(처음 1번) — 자세한 순서는 README.md
  *   스크립트 속성  PASS        = 비밀번호(16글자 이상)
  *                  TODO_FOLDER = 볼트 todo 폴더의 드라이브 ID
+ *                  LOG_FILE    = (선택) 작업 로그 log.md 파일의 드라이브 ID
  *   배포 → 웹 앱 / 실행: 나 / 액세스: 모든 사용자
  */
 
 const TZ = 'Asia/Seoul';
-const VERSION = '2026-11-24g';
+const VERSION = '2026-11-24i';
 // PC에서 고친 지 이만큼 안 지난 파일에는 읽으면서 번호를 붙여 쓰지 않는다. 옵시디언이 아직 쓰는 중일 수 있다
 const FRESH_MS = 2 * 60 * 1000;
 const TRASH = '휴지통.md';
@@ -190,7 +191,8 @@ const ACTIONS = {
       jobs: rows_(texts.job, 'job'), docs: rows_(texts.doc, 'doc'),
       news: [], logs: [], sorries: [], scans: [],
     };
-    // 캘린더를 못 읽어도 할 일은 보여야 한다
+    // 캘린더나 메일을 못 읽어도 할 일은 보여야 한다
+    try { out.mail = mailList_(); } catch (err) { out.mailError = String(err && err.message || err); }
     try { out.events = calendarEvents_(addDays_(today, -45), addDays_(today, 90)); } catch (err) { out.calError = String(err && err.message || err); }
     return out;
   },
@@ -246,6 +248,44 @@ const ACTIONS = {
       writeText_(folder, KINDS[a.kind].file, k.text);
       return { id: a.id };
     });
+  },
+
+  /**
+   * 옵시디언 작업 로그(log.md)를 읽어 최근 기록과 정리 안 된 문장을 준다. 읽기만 하고 고치지 않는다.
+   * todo 폴더 밖의 파일이라 스크립트 속성 LOG_FILE에 그 파일 하나의 ID를 따로 적어야 한다.
+   * 작업 내용이 들어 있으므로 load에는 넣지 않는다. 화면이 열 때만 받아 가고 기기에 저장하지 않는다.
+   */
+  worklog: function () {
+    const id = PropertiesService.getScriptProperties().getProperty('LOG_FILE');
+    if (!id) throw new Error('서버에 LOG_FILE(작업 로그 파일 ID)이 설정되지 않았습니다');
+    const text = DriveApp.getFileById(id).getBlob().getDataAsString('UTF-8');
+    return { entries: parseLog(text, 80), at: new Date().toISOString() };
+  },
+
+  /** 메일 대화에 읽음, 안 읽음, 보관, 별표 처리를 한다. 지우기는 없다. */
+  mailAct: function (a) {
+    const th = thread_(a.id);
+    if (a.op === 'read') th.markRead();
+    else if (a.op === 'unread') th.markUnread();
+    else if (a.op === 'archive') th.moveToArchive();
+    else if (a.op === 'star') th.getMessages().slice(-1)[0].star();
+    else if (a.op === 'unstar') th.getMessages().forEach(function (m) { m.unstar(); });
+    else throw new Error('알 수 없는 메일 동작');
+    return { id: a.id, op: a.op };
+  },
+
+  /** 대화의 마지막 세 통을 글자로 준다. */
+  mailBody: function (a) {
+    return thread_(a.id).getMessages().slice(-3).map(function (m) {
+      return { from: m.getFrom(), to: m.getTo(), cc: m.getCc(), date: m.getDate().toISOString(), subject: m.getSubject(),
+        body: m.getPlainBody().replace(/\n{3,}/g, '\n\n').slice(0, 6000) };
+    });
+  },
+
+  /** 최근 30일 메일에서 채용 공고를 찾는다. 받은편지함 밖(보관, 라벨)도 본다. q는 화면에서 바꾼 검색 조건이다. */
+  jobMail: function (a) {
+    const q = String(a.q || '').replace(/\s+/g, ' ').trim().slice(0, 200) || JOB_MAIL_QUERY;
+    return GmailApp.search('newer_than:30d ' + q, 0, 40).map(mailRow_);
   },
 
   /** 그 해의 총 연차와 특별휴가 일수를 정한다. 그 해 줄이 있으면 고치고 없으면 만든다. */
@@ -304,6 +344,26 @@ const ACTIONS = {
     return { ok: true };
   },
 };
+
+/* ───────── 지메일 ───────── */
+const JOB_MAIL_QUERY = 'subject:(채용 OR 공고 OR 면접 OR 서류전형 OR 입사지원)';
+
+/** 화면에 주는 메일 대화 한 줄. 본문은 앞 140글자만 넣는다. */
+function mailRow_(th) {
+  const m = th.getMessages().slice(-1)[0];
+  return { id: th.getId(), subj: th.getFirstMessageSubject() || '(제목 없음)',
+    from: m.getFrom().replace(/<.*>/, '').replace(/"/g, '').trim() || m.getFrom(),
+    at: th.getLastMessageDate().toISOString(), snip: m.getPlainBody().replace(/\s+/g, ' ').slice(0, 140),
+    unread: th.isUnread(), star: th.hasStarredMessages(), imp: th.isImportant(), n: th.getMessageCount() };
+}
+
+function mailList_() { return GmailApp.search('in:inbox', 0, 30).map(mailRow_); }
+
+function thread_(id) {
+  const th = GmailApp.getThreadById(String(id));
+  if (!th) throw new Error('메일을 찾지 못했습니다');
+  return th;
+}
 
 /* ───────── 근태 ───────── */
 const ATT_TYPES = ['야근', '연차', '반차', '특별휴가', '대체휴가'];

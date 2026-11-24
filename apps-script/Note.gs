@@ -251,9 +251,35 @@ function find_(lines, id) {
   return hit;
 }
 
+/* ───────── 작업 로그 ───────── */
+// 아직 정리되지 않았다는 뜻의 말. '커밋은 안 함'은 기록마다 붙는 말이라 넣지 않는다
+const OPEN_RE = /대기|확인 필요|확인 못|확인하지 못|남은 문제|남은 것|남은 일|남은 위험/;
+const LOG_HEAD_RE = /^## (\d{4}-\d{2}-\d{2})\s+(.+?)\s*$/;
+
+/**
+ * 작업 로그 글을 날짜별 기록으로 나눈다. '## 2026-11-24 제목' 줄이 기록의 시작이다.
+ * 최근 것부터 limit개를 준다. open은 그 기록에서 아직 정리되지 않았다고 읽히는 문장들이다.
+ */
+function parseLog(text, limit) {
+  const lines = splitLines_(text).lines;
+  const out = [];
+  let cur = null;
+  lines.forEach(function (line) {
+    const m = LOG_HEAD_RE.exec(line);
+    if (m) { cur = { d: m[1], t: m[2], body: [] }; out.push(cur); return; }
+    if (/^## /.test(line)) { cur = null; return; }          // 날짜 없는 절은 기록이 아니다
+    if (cur) cur.body.push(line);
+  });
+  return out.reverse().slice(0, limit).map(function (e) {
+    const body = e.body.join('\n').trim();
+    const open = body.split(/(?<=\.)\s+|\n+/).map(function (s) { return s.trim(); }).filter(function (s) { return s && OPEN_RE.test(s); });
+    return { d: e.d, t: e.t, body: body.length > 2000 ? body.slice(0, 2000) + '…' : body, open: open.slice(0, 20) };
+  });
+}
+
 if (typeof module !== 'undefined') {
   module.exports = {
     KINDS: KINDS, listRecords: listRecords, ensureIds: ensureIds, addRecord: addRecord,
-    updateRecord: updateRecord, takeRecord: takeRecord, cleanTitle: cleanTitle,
+    updateRecord: updateRecord, takeRecord: takeRecord, cleanTitle: cleanTitle, parseLog: parseLog,
   };
 }

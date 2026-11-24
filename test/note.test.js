@@ -129,4 +129,17 @@ assert.deepStrictEqual(N.listRecords(dc0, 'doc')[0].job, []);
 assert.throws(() => N.updateRecord(dc, 'doc', 'dddddd', { job: ['a b', '\n- [ ] 끼워넣기'] }), /값 형식/);
 assert.throws(() => N.updateRecord(dc, 'doc', 'dddddd', { kind: ['목록이 아닌 항목'] }), /값 형식/);
 
+/* ── 작업 로그 읽기: 날짜별 기록으로 나누고 정리 안 된 문장을 고른다 ── */
+const LOG = ['머리말은 기록이 아니다', '', '## 2026-11-22 첫 기록', '', '고쳤다. 컴파일 에러 없음. 커밋은 안 함.', '',
+  '## 2026-11-23 둘째 기록', '원인을 찾았다. 고칠지 사용자 확인 대기. 빌드에서는 확인하지 못했다.', '남은 문제: 강조가 꺼진다.', '',
+  '## 제목만 있고 날짜가 없는 절', '이건 기록이 아니다', '', '## 2026-11-24 셋째 기록', '끝냈다.'].join('\n');
+const lg = N.parseLog(LOG, 10);
+assert.deepStrictEqual(lg.map(e => [e.d, e.t]), [['2026-11-24', '셋째 기록'], ['2026-11-23', '둘째 기록'], ['2026-11-22', '첫 기록']]);   // 최근 것부터
+assert.deepStrictEqual(lg[1].open, ['고칠지 사용자 확인 대기.', '빌드에서는 확인하지 못했다.', '남은 문제: 강조가 꺼진다.']);
+assert.deepStrictEqual(lg[2].open, []);                      // '커밋은 안 함'은 늘 붙는 말이라 세지 않는다
+assert.strictEqual(lg[0].body, '끝냈다.');
+assert.strictEqual(N.parseLog(LOG, 2).length, 2);
+assert.deepStrictEqual(N.parseLog('', 10), []);
+assert.ok(N.parseLog('## 2026-11-24 긴 기록\n' + '가'.repeat(5000), 10)[0].body.length <= 2001);
+
 console.log('note.test.js 통과');

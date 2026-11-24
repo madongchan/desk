@@ -5,7 +5,9 @@ const { makeContext, fakeFolder } = require('./fake-google');
 
 const PASS = 'correct-horse-battery-staple';
 const root = fakeFolder('todo');
-const g = makeContext(root, { PASS: PASS, TODO_FOLDER: 'folder-id' });
+const PROPS = { PASS: PASS, TODO_FOLDER: 'folder-id' };
+const logFile = { getBlob: () => ({ getDataAsString: () => '## 2026-11-23 어떤 작업\n고쳤다. 사용자 확인 대기.\n\n## 2026-11-24 다른 작업\n끝냈다.\n' }), setContent() { throw new Error('작업 로그는 읽기만 한다'); } };
+const g = makeContext(root, PROPS, { 'log-id': logFile });
 const ctx = g.ctx;
 
 const post = (action, args, pass) =>
@@ -216,6 +218,43 @@ assert.deepStrictEqual(r.data.jobs.map(j => [j.n, j.st, j.chk]), [['어느 게�
 assert.deepStrictEqual(r.data.docs.map(d => [d.t, d.job]), [['이력서', [jid]], ['공통 포트폴리오', []]]);
 assert.deepStrictEqual(post('trash', { kind: 'job', id: jid }).data, { id: jid });
 assert.deepStrictEqual(post('load', {}).data.jobs, []);
+
+// 지메일: 받은편지함 목록은 읽기에 딸려 오고, 본문과 처리와 공고 검색은 따로 요청한다
+r = post('load', {});
+assert.deepStrictEqual(r.data.mail.map(m => [m.id, m.subj, m.from, m.unread, m.n]), [['t1', '채용 공고 안내', '어느 회사', true, 1], ['t2', '(제목 없음)', 'f@example.com', false, 1]]);
+assert.strictEqual(r.data.mail[0].snip, '본문 채용 공고 안내 끝');
+assert.strictEqual(r.data.mailError, null);
+assert.deepStrictEqual(post('mailAct', { id: 't1', op: 'read' }).data, { id: 't1', op: 'read' });
+assert.strictEqual(post('load', {}).data.mail[0].unread, false);
+post('mailAct', { id: 't1', op: 'star' });
+assert.strictEqual(post('load', {}).data.mail[0].star, true);
+assert.strictEqual(post('mailAct', { id: 't1', op: 'delete' }).ok, false);          // 지우기는 없다
+assert.strictEqual(post('mailAct', { id: 'nope', op: 'read' }).ok, false);
+r = post('mailBody', { id: 't1' });
+assert.deepStrictEqual([r.data.length, r.data[0].subject, r.data[0].body], [1, '채용 공고 안내', '본문   채용 공고 안내\n\n끝']);
+assert.strictEqual(post('mailBody', { id: 'nope' }).ok, false);
+post('jobMail', {});
+assert.match(g.searches().slice(-1)[0], /^newer_than:30d subject:\(/);
+post('jobMail', { q: '채용\n' + 'x'.repeat(500) });
+assert.ok(g.searches().slice(-1)[0].length <= 220 && !g.searches().slice(-1)[0].includes('\n'));
+post('mailAct', { id: 't2', op: 'archive' });
+assert.deepStrictEqual(post('load', {}).data.mail.map(m => m.id), ['t1']);
+// 메일을 못 읽어도 할 일은 나온다
+g.breakMail(true);
+r = post('load', {});
+assert.ok(r.ok && r.data.tasks.length > 0 && r.data.mail === null && /권한/.test(r.data.mailError));
+g.breakMail(false);
+
+// 작업 기록: 옵시디언 작업 로그를 읽기만 한다. 평소 읽기(load)에는 넣지 않는다
+assert.match(post('worklog', {}).error, /LOG_FILE/);                               // 설정 전에는 안내만 한다
+PROPS.LOG_FILE = 'log-id';
+r = post('worklog', {});
+assert.strictEqual(r.ok, true, r.error);
+assert.deepStrictEqual(r.data.entries.map(e => [e.d, e.t, e.open]), [['2026-11-24', '다른 작업', []], ['2026-11-23', '어떤 작업', ['사용자 확인 대기.']]]);
+assert.ok(!JSON.stringify(post('load', {}).data).includes('어떤 작업'));
+PROPS.LOG_FILE = 'nope';
+assert.strictEqual(post('worklog', {}).ok, false);
+delete PROPS.LOG_FILE;
 
 // 일정 추가: 입력을 검사한 뒤 캘린더에 쓴다
 assert.strictEqual(post('eventAdd', { title: '회의', date: '11/25' }).ok, false);

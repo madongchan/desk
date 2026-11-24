@@ -852,7 +852,7 @@ const S={
   f:{q:"",p:"",y:"",mode:"list"}, sync:{busy:false,err:null}, addDay:null, palette:null,
 };
 // desk: 원본의 브리핑, 오피스 메뉴와 고정 프로젝트는 뺐다
-const VIEWS=[["today","대시보드","today"],["work","업무","work"],["life","일상","life"],["att","근태","att"],["pf","포트폴리오","star"],["job","커리어","star"],["tools","도구","tools"]];
+const VIEWS=[["today","대시보드","today"],["work","업무","work"],["life","일상","life"],["att","근태","att"],["pf","포트폴리오","star"],["job","커리어","star"],["log","작업 기록","news"],["tools","도구","tools"]];
 const PVIEWS=[];
 
 /* ═════════ 서버 ═════════ */
@@ -1025,8 +1025,8 @@ function viewToday(){
       right:h("span",{class:"faint",style:"font-size:11.5px"},"체크하면 결정 완료")},
     decs.length?h("div",{class:"list"},decs.sort((a,b)=>({"상":0,"중":1,"하":2}[a.r]??3)-({"상":0,"중":1,"하":2}[b.r]??3)).map(t=>taskRow(t,{strip:true,quickToday:false}))):h("div",{class:"empty"},"지금 결정할 일이 없습니다"));
 
-  // desk: 스캔, 회사 메일, 브리핑 카드와 문장 카드는 뺐다
-  const right=h("div",{class:"stack"},dec,habitsCard(true),memoCard(5));
+  // desk: 스캔, 브리핑 카드와 문장 카드는 뺐다
+  const right=h("div",{class:"stack"},dec,mailCard("main"),habitsCard(true),memoCard(5));
   return [hero,h("div",{class:"quick-row"},quickAdd()),ddays,h("div",{class:"grid g-today"},left,right),weekCard(),monthCard(),projectsCard()];
 }
 const greet=d=>{const H=d.getHours();return H<11?"좋은 아침입니다":H<14?"점심 맛있게 드세요":H<18?"오후도 힘내세요":"오늘도 수고 많으셨습니다"};
@@ -1195,6 +1195,7 @@ function closeSheet(){S.sel=null;render()}
 function sheetView(){
   if(!S.sel||!S.data)return null;
   if(S.sel.kind==="jobs")return jobSheet();
+  if(S.sel.kind==="mail")return mailSheet();
   const t=byId(S.data.tasks,S.sel.id);if(!t){S.sel=null;return null}
   const today=TODAY(),dd=dOf(t.d),tm=tOf(t.d)||"";
   const setDate=(d,time)=>updTask(t.id,{d:d?(time?`${d}T${time}:00+09:00`:d):null});
@@ -1237,6 +1238,7 @@ function paletteItems(q){
     S.data.tasks.filter(t=>(t.t+" "+(t.detail||"")).toLowerCase().includes(L)).slice(0,12).forEach(t=>out.push({n:t.t,sub:(isDone(t)?"완료 · ":"")+(t.d?fmtMD(dOf(t.d)):"할 일"),fn:()=>openSheet("tasks",t.id)}));
     (S.data.memos||[]).filter(m=>m.t.toLowerCase().includes(L)).slice(0,5).forEach(m=>out.push({n:m.t,sub:"메모",fn:()=>{S.view="life";render()}}));
     (S.data.jobs||[]).filter(j=>(j.n||"").toLowerCase().includes(L)).slice(0,5).forEach(j=>out.push({n:j.n,sub:"커리어",fn:()=>openSheet("jobs",j.id)}));
+    (S.data.mail||[]).filter(m=>(m.subj+" "+m.from).toLowerCase().includes(L)).slice(0,5).forEach(m=>out.push({n:m.subj,sub:"메일 · "+m.from,fn:()=>openMail(m,"main")}));
     allEvents().filter(e=>e.t.toLowerCase().includes(L)).slice(0,5).forEach(e=>out.push({n:e.t,sub:"일정 · "+fmtMD(dOf(e.s)),fn:()=>{S.view="life";render()}}));
   }
   return out.slice(0,30);
@@ -1386,7 +1388,7 @@ function viewLife(){
     S.data.calError?h("div",{class:"banner"},"캘린더를 읽지 못했습니다: "+S.data.calError):null,
     Object.keys(byDay).length?h("div",{class:"pj-scroll"},Object.keys(byDay).sort().slice(0,14).map(k=>h("div",null,h("div",{class:"sec-t"},rel(k)+" · "+fmtMD(k)),byDay[k].map(e=>evRow(e,new Date()))))):h("div",{class:"empty"},"다가오는 일정이 없습니다"),
     h("div",{class:"faint",style:"font-size:12px"},"새 일정은 오늘 화면 입력칸에서 「일정」을 고르고 \"다음주 화요일 2시 미팅\"처럼 적으면 됩니다"));
-  return [h("div",{class:"grid g2"},h("div",{class:"stack"},habitsCard(false)),cal),memoCard(0)];
+  return [h("div",{class:"grid g2"},h("div",{class:"stack"},habitsCard(false),mailCard("main")),cal),memoCard(0)];
 }
 
 /* ═════════ 도구 ═════════ */
@@ -1936,27 +1938,6 @@ function docsCard(){
     h("div",{class:"row",style:"gap:8px;flex-wrap:wrap"},missing.map(k=>h("button",{class:"btn sm",onclick:()=>docAdd(job.id,k,`${job.n} · ${k}`,DOC_KINDS.indexOf(k)*10)},"+ "+k)),
       job?draftIn("doc-q",{class:"in grow",placeholder:"자기소개서 문항 추가 (예: 지원 동기)","aria-label":"문항",onkeydown:e=>{if(e.key==="Enter"&&!e.isComposing&&(S.drafts["doc-q"]||"").trim()){const t=S.drafts["doc-q"].trim();S.drafts["doc-q"]="";docAdd(job.id,"자기소개서",t,20+ds.length)}}}):null));
 }
-function viewJob(){
-  pfLoad();
-  const js=S.data.jobs||[],today=TODAY(),live=js.filter(j=>!["합격","불합격","보류"].includes(j.st));
-  const flow=["관심","서류 준비","지원 완료","면접","합격"].map(s=>[s,js.filter(j=>(j.st||"관심")===s).length,""]);
-  const due=live.filter(j=>j.d&&dOf(j.d)>=today&&!["지원 완료","면접"].includes(j.st)).sort((a,b)=>a.d<b.d?-1:1);
-  const nextOf=j=>{const c=jobCk(j),i=JOB_CK.findIndex((_,k)=>!c.includes(k));return i<0?"제출 준비 끝":JOB_CK[i]};
-  const dueCard=card("마감과 다음 할 일",{icon:"cal",count:due.length+"곳"},due.length?h("div",{class:"list"},due.map(j=>{const n=diff(dOf(j.d),today);
-    return h("div",{class:"task",style:"grid-template-columns:auto minmax(0,1fr) auto;gap:10px"},h("b",{class:"num",style:`color:${n<=3?"var(--red)":n<=7?"var(--orange)":"#409cff"};font-size:13px`},n===0?"D-DAY":"D-"+n),
-      h("div",{class:"body",onclick:()=>openSheet("jobs",j.id)},h("span",{class:"tt"},j.n||"(이름 없음)"),h("div",{class:"meta"},h("span",null,j.role||""),h("span",null,`다음: ${nextOf(j)}`))),h("span",{class:"faint num",style:"font-size:12px"},`${jobCk(j).length}/${JOB_CK.length}`))})):h("div",{class:"empty"},"마감이 잡힌 지원처가 없습니다"));
-  const st=pfStats(pfItems()),outN=S.data.tasks.filter(t=>t.out&&(dOf(t.d)||"").startsWith(today.slice(0,7))).length;
-  const ranked=live.map(j=>({j,s:jobScore(j)})).sort((a,b)=>(b.s??-1)-(a.s??-1));
-  const fitC=card("공고 적합도",{icon:"star",count:"내 업무 기록과 공고 대조",cls:"attn"},ranked.length?h("div",{class:"list"},ranked.map(({j,s})=>h("div",{class:"task",style:"grid-template-columns:auto minmax(0,1fr) auto;gap:10px"},
-      h("b",{class:"num",style:"font-size:15px;min-width:34px;color:"+(s==null?"var(--fg2)":s>=70?"#30d158":s>=40?"#ff9f0a":"#ff6961")},s==null?"–":s),
-      h("div",{class:"body",onclick:()=>openSheet("jobs",j.id)},h("span",{class:"tt"},j.n||"(이름 없음)"),h("div",{class:"meta"},h("span",null,j.role||""),s==null?h("span",null,"공고 원문을 넣어 주세요"):h("span",null,"보완: "+(jobMatch(j.post).rows.filter(x=>x.lv==="약").map(x=>x.n).join(", ")||"없음")))),
-      h("span",{class:"faint",style:"font-size:12px"},j.st||"관심")))):h("div",{class:"empty"},"지원처를 추가하면 적합도 순으로 보입니다"));
-  const pfC=card("경력 자료",{icon:"star",count:`이번 달 성과 ${outN}/3건`},
-    h("div",{class:"faint",style:"font-size:12.5px;line-height:1.7"},"업무를 끝낼 때 성과를 한 줄 적어 두면 지원서에 그대로 쓸 수 있습니다. 경력기술서·자기소개서 최신본은 위 「서류 준비」에 있습니다."),
-    h("div",{class:"row",style:"gap:8px;flex-wrap:wrap"},h("button",{class:"btn pri",onclick:()=>{S.view="pf";ls.set("desk:view","pf");render()}},"성과 기록하러 가기"),
-      h("button",{class:"btn",disabled:st.n?null:"disabled",onclick:()=>pfCopy(cvLines(st).join("\n"),"경력기술서 문장을 복사했습니다")},"경력기술서 문장 복사")));
-  return [h("div",{class:"kpis",style:"grid-template-columns:repeat(5,minmax(0,1fr))"},flow.map(([n,v,s])=>kpi(n,v,"건",s))),fitC,docsCard(),dueCard,jobsCard(),pfC];
-}
 
 /* ═════════ 음악 (유튜브) ═════════ */
 
@@ -1986,6 +1967,116 @@ function jobSheet(){
 }
 
 S.docOpen={};S.docJob=null;
+S.mf={main:"all"};S.mailOpen={};S.mailBody={};
+/* ═════════ desk: 원본에서 다시 옮겨 온 화면 (viewJob, mailCard, mailSheet, jmLoad, jmOpen) ═════════ */
+const JM={d:null,loading:false,err:null,q:ls.get("desk:jobq","")};
+function jmLoad(force){
+  if(S.demo||JM.loading||(JM.d&&!force))return;
+  if(JM.err&&!force)return;
+  JM.loading=true;JM.err=null;
+  api("jobMail",{q:JM.q}).then(r=>{JM.d=r}).catch(e=>{JM.err=e.message}).finally(()=>{JM.loading=false;if(S.view==="job")render()});
+}
+function jmOpen(m){if(!byId(S.data.mail||[],m.id))(S.data.mail=S.data.mail||[]).push(m);openMail(m,"main")}
+function viewJob(){
+  jmLoad();pfLoad();
+  const js=S.data.jobs||[],today=TODAY(),live=js.filter(j=>!["합격","불합격","보류"].includes(j.st)),mails=JM.d||[];
+  const flow=[["공고 메일",mails.length,"30일"],...["관심","서류 준비","지원 완료","면접","합격"].map(s=>[s,js.filter(j=>(j.st||"관심")===s).length,""])];
+  const due=live.filter(j=>j.d&&dOf(j.d)>=today&&!["지원 완료","면접"].includes(j.st)).sort((a,b)=>a.d<b.d?-1:1);
+  const nextOf=j=>{const c=jobCk(j),i=JOB_CK.findIndex((_,k)=>!c.includes(k));return i<0?"제출 준비 끝":JOB_CK[i]};
+  const dueCard=card("마감과 다음 할 일",{icon:"cal",count:due.length+"곳"},due.length?h("div",{class:"list"},due.map(j=>{const n=diff(dOf(j.d),today);
+    return h("div",{class:"task",style:"grid-template-columns:auto minmax(0,1fr) auto;gap:10px"},h("b",{class:"num",style:`color:${n<=3?"var(--red)":n<=7?"var(--orange)":"#409cff"};font-size:13px`},n===0?"D-DAY":"D-"+n),
+      h("div",{class:"body",onclick:()=>openSheet("jobs",j.id)},h("span",{class:"tt"},j.n||"(이름 없음)"),h("div",{class:"meta"},h("span",null,j.role||""),h("span",null,`다음: ${nextOf(j)}`))),h("span",{class:"faint num",style:"font-size:12px"},`${jobCk(j).length}/${JOB_CK.length}`))})):h("div",{class:"empty"},"마감이 잡힌 지원처가 없습니다"));
+  const save=()=>{JM.q=(S.drafts["jm-q"]??JM.q).trim();ls.set("desk:jobq",JM.q);jmLoad(true);render()};
+  if(S.drafts["jm-q"]===undefined)S.drafts["jm-q"]=JM.q;
+  const mailC=card("공고 메일",{icon:"news",count:JM.loading?"불러오는 중…":`최근 30일 ${mails.length}통`,right:h("button",{class:"btn ghost sm",onclick:()=>jmLoad(true)},ic("refresh"))},
+    S.demo?h("div",{class:"empty"},"예시 모드에서는 메일을 불러오지 않습니다"):JM.err?h("div",{class:"banner"},"메일을 불러오지 못했습니다: "+JM.err):null,
+    mails.length?h("div",{class:"list",style:"max-height:420px;overflow:auto"},mails.map(m=>h("div",{class:"task",style:"grid-template-columns:minmax(0,1fr) auto;gap:10px"},
+      h("div",{class:"body",onclick:()=>jmOpen(m)},h("span",{class:"tt"},m.subj),h("div",{class:"meta"},h("span",null,fmtMD(dOf(m.at))),h("span",null,m.from))),
+      h("button",{class:"btn sm",onclick:()=>{S.drafts["j-n"]=m.subj.replace(/^\[[^\]]*\]\s*/,"").slice(0,40);render();const el=$("#j-n");if(el){el.scrollIntoView({block:"center"});el.focus();el.select()}}},"지원처로")))):(!JM.loading&&!S.demo&&!JM.err?h("div",{class:"empty"},"찾은 메일이 없습니다"):null),
+    h("div",{class:"row"},draftIn("jm-q",{class:"in grow",placeholder:"기본: 제목에 채용·공고·면접·서류전형·입사지원","aria-label":"메일 검색 조건",onkeydown:e=>{if(e.key==="Enter"&&!e.isComposing)save()}}),h("button",{class:"btn ghost sm",onclick:save},"검색 조건 저장")));
+  const st=pfStats(pfItems()),outN=S.data.tasks.filter(t=>t.out&&(dOf(t.d)||"").startsWith(today.slice(0,7))).length;
+  const ranked=live.map(j=>({j,s:jobScore(j)})).sort((a,b)=>(b.s??-1)-(a.s??-1));
+  const fitC=card("공고 적합도",{icon:"star",count:"내 업무 기록과 공고 대조",cls:"attn"},ranked.length?h("div",{class:"list"},ranked.map(({j,s})=>h("div",{class:"task",style:"grid-template-columns:auto minmax(0,1fr) auto;gap:10px"},
+      h("b",{class:"num",style:"font-size:15px;min-width:34px;color:"+(s==null?"var(--fg2)":s>=70?"#30d158":s>=40?"#ff9f0a":"#ff6961")},s==null?"–":s),
+      h("div",{class:"body",onclick:()=>openSheet("jobs",j.id)},h("span",{class:"tt"},j.n||"(이름 없음)"),h("div",{class:"meta"},h("span",null,j.role||""),s==null?h("span",null,"공고 원문을 넣어 주세요"):h("span",null,"보완: "+(jobMatch(j.post).rows.filter(x=>x.lv==="약").map(x=>x.n).join(", ")||"없음")))),
+      h("span",{class:"faint",style:"font-size:12px"},j.st||"관심")))):h("div",{class:"empty"},"지원처를 추가하면 적합도 순으로 보입니다"));
+  const pfC=card("경력 자료",{icon:"star",count:`이번 달 성과 ${outN}/3건`},
+    h("div",{class:"faint",style:"font-size:12.5px;line-height:1.7"},"업무를 끝낼 때 성과를 한 줄 적어 두면 지원서에 그대로 쓸 수 있습니다. 경력기술서·자기소개서 최신본은 위 「서류 준비」에 있습니다."),
+    h("div",{class:"row",style:"gap:8px;flex-wrap:wrap"},h("button",{class:"btn pri",onclick:()=>{S.view="pf";ls.set("desk:view","pf");render()}},"성과 기록하러 가기"),
+      h("button",{class:"btn",disabled:st.n?null:"disabled",onclick:()=>pfCopy(cvLines(st).join("\n"),"경력기술서 문장을 복사했습니다")},"경력기술서 문장 복사")));
+  return [h("div",{class:"kpis",style:"grid-template-columns:repeat(6,minmax(0,1fr))"},flow.map(([n,v,s])=>kpi(n,v,"건",s))),fitC,docsCard(),h("div",{class:"grid g2"},dueCard,mailC),jobsCard(),pfC];
+}
+const gmailUrl=(acct,id)=>`https://mail.google.com/mail/u/?authuser=${encodeURIComponent(acct||"")}#all/${id}`;
+function mailBox(src){return S.data} // desk: 구글 계정이 하나다
+function mailAct(m,src,op,msg){
+  mutate(D=>{const box=src==="work"?D.work:D;const x=byId(box.mail,m.id);if(!x)return;
+      if(op==="read")x.unread=false;else if(op==="unread")x.unread=true;else if(op==="star")x.star=true;else if(op==="unstar")x.star=false;else if(op==="archive")box.mail=box.mail.filter(y=>y.id!==m.id)},
+    ()=>api("mailAct",{id:m.id,op}),msg);
+}
+function openMail(m,src){S.sel={kind:"mail",id:m.id,src};if(m.unread)mailAct(m,src,"read");
+  if(!S.mailBody[m.id]){S.mailBody[m.id]="loading";api("mailBody",{id:m.id}).then(r=>{S.mailBody[m.id]=r}).catch(e=>{S.mailBody[m.id]={error:e.message}}).finally(render)}render()}
+function mailToTask(m,src){addTask({t:"📧 "+m.subj,note:`${src==="work"?"회사":"개인"} 메일 · ${m.from} · ${gmailUrl((mailBox(src)||{}).account,m.id)}`})}
+function mailCard(src){
+  const isWork=false,title="메일",box=mailBox(src);
+  const err=box&&(box.error||box.mailError),all=(box&&box.mail)||[],f=S.mf[src];
+  const list=all.filter(m=>f==="unread"?m.unread:f==="star"?m.star:true);
+  const unread=all.filter(m=>m.unread).length,lim=S.mailOpen[src]?30:(isWork?6:8);
+  return card(title,{icon:"cal",count:`안 읽음 ${unread}`,right:h("div",{class:"row"},
+      h("div",{class:"seg",role:"group","aria-label":"메일 보기"},[["all","받은편지함"],["unread","안 읽음"],["star","별표"]].map(([k,n])=>h("button",{"aria-pressed":String(f===k),onclick:()=>{S.mf[src]=k;render()}},n))),
+      box&&box.account?h("a",{class:"icon-btn",href:`https://mail.google.com/mail/u/?authuser=${encodeURIComponent(box.account)}`,target:"_blank",rel:"noopener",title:"Gmail 열기","aria-label":"Gmail 열기"},ic("ext")):null)},
+    err?h("div",{class:"banner"},"메일을 읽지 못했습니다: "+err):null,
+    list.length?h("div",null,list.slice(0,lim).map(m=>mailRow(m,src))):h("div",{class:"empty"},f==="unread"?"안 읽은 메일이 없습니다":"표시할 메일이 없습니다"),
+    list.length>lim||S.mailOpen[src]?h("button",{class:"btn ghost sm",onclick:()=>{S.mailOpen[src]=!S.mailOpen[src];render()}},S.mailOpen[src]?"접기":`${list.length-lim}개 더 보기`):null);
+}
+function mailRow(m,src){
+  return h("div",{class:"mail"+(m.unread?" un":"")},h("span",{class:"dot"}),
+    h("div",{class:"bd",role:"button",tabindex:"0",onclick:()=>openMail(m,src),onkeydown:e=>{if(e.key==="Enter")openMail(m,src)}},
+      h("div",{class:"top"},h("b",null,(m.star?"⭐ ":"")+m.from),h("small",null,rel(m.at).replace(/ \d\d:\d\d$/,"")+" "+tOf(m.at))),
+      h("div",{class:"sj"},m.subj+(m.n>1?` (${m.n})`:"")),h("div",{class:"sn"},m.snip)),
+    h("div",{class:"acts"},
+      h("button",{class:"icon-btn",title:m.unread?"읽음으로":"안 읽음으로","aria-label":m.unread?"읽음으로 표시":"안 읽음으로 표시",onclick:()=>mailAct(m,src,m.unread?"read":"unread")},ic("check")),
+      h("button",{class:"icon-btn",title:m.star?"별표 해제":"별표","aria-label":"별표",style:m.star?"color:var(--yellow)":"",onclick:()=>mailAct(m,src,m.star?"unstar":"star")},ic("star")),
+      h("button",{class:"icon-btn",title:"할 일로 만들기","aria-label":"할 일로 만들기",onclick:()=>mailToTask(m,src)},ic("arrow")),
+      h("button",{class:"icon-btn",title:"보관(받은편지함에서 빼기)","aria-label":"보관",onclick:()=>mailAct(m,src,"archive","보관했습니다")},ic("chevd"))));
+}
+function mailSheet(){
+  const src=S.sel.src,box=mailBox(src)||{},m=byId(box.mail||[],S.sel.id),b=S.mailBody[S.sel.id];
+  return h("aside",{class:"sheet","aria-label":"메일"},h("header",null,h("b",null,"메일"),
+      h("a",{class:"btn ghost sm",href:gmailUrl(box.account,S.sel.id),target:"_blank",rel:"noopener"},"Gmail에서 답장",ic("ext")),h("button",{class:"icon-btn","aria-label":"닫기",onclick:closeSheet},ic("x"))),
+    h("div",{class:"bd"},m?h("textarea",{class:"title",rows:"2",readonly:true,value:m.subj}):null,
+      b==="loading"||!b?h("div",{class:"empty"},"본문을 불러오는 중…"):b.error?h("div",{class:"banner"},b.error):
+        b.map(x=>h("div",{class:"msg"},h("div",{class:"h"},x.from," · ",new Date(x.date).toLocaleString("ko-KR",{month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"})),h("pre",null,x.body)))),
+    m?h("footer",null,h("button",{class:"btn",onclick:()=>{mailToTask(m,src)}},ic("arrow"),"할 일로"),h("button",{class:"btn",onclick:()=>mailAct(m,src,m.star?"unstar":"star")},ic("star"),m.star?"별표 해제":"별표"),
+      h("button",{class:"btn",onclick:()=>{mailAct(m,src,"archive","보관했습니다");closeSheet()}},"보관")):null);
+}
+
+/* ═════════ desk: 작업 기록 — 옵시디언 작업 로그를 읽어 아직 정리되지 않은 것을 모아 본다. 읽기만 한다 ═════════ */
+// 작업 내용은 평소 읽기에 들어 있지 않다. 이 화면을 열 때 받아 와 여기에만 들고, 기기에 저장하지 않는다
+S.wlog={rows:null,busy:false,err:null};
+function wlogLoad(force){
+  const W=S.wlog;if(W.busy||(W.rows&&!force))return;
+  W.busy=true;W.err=null;
+  api("worklog",{}).then(r=>{W.rows=r.entries}).catch(e=>{W.err=e.message}).finally(()=>{W.busy=false;if(S.view==="log")render()});
+}
+function viewLog(){
+  wlogLoad();
+  const W=S.wlog;
+  if(W.err)return [h("div",{class:"banner"},"작업 기록을 읽지 못했습니다: "+W.err," ",h("button",{class:"btn sm",onclick:()=>wlogLoad(true)},"다시 시도"))];
+  if(!W.rows)return [h("div",{class:"empty"},"작업 기록을 불러오는 중…")];
+  const rows=W.rows,open=rows.filter(r=>r.open.length),nOpen=open.reduce((s,r)=>s+r.open.length,0);
+  const head=h("div",{class:"kpis"},kpi("읽은 기록",rows.length,"건",rows.length?fmtMD(rows[rows.length-1].d)+" 부터":""),kpi("정리 안 된 것",nOpen,"건",open.length?open.length+"개 기록에서":"모두 정리됐습니다"));
+  const openC=card("정리 안 된 것",{icon:"today",count:open.length+"개 기록",cls:open.length?"attn":"",right:h("button",{class:"btn ghost sm","aria-label":"다시 읽기",onclick:()=>wlogLoad(true)},ic("refresh"))},
+    open.length?h("div",null,open.map(r=>h("div",{style:"padding:10px 0;border-top:.5px solid var(--line)"},
+      h("div",null,h("b",null,r.t)," ",h("span",{class:"faint",style:"font-size:12px"},fmtMD(r.d))),
+      r.open.map(s=>h("div",{class:"row",style:"gap:8px;align-items:flex-start;flex-wrap:nowrap;margin-top:6px"},h("span",{style:"flex:1;min-width:0;font-size:13px;line-height:1.6"},s),
+        h("button",{class:"btn ghost sm",onclick:()=>addTask({t:s.slice(0,120),d:TODAY()})},"할 일로")))))):h("div",{class:"empty"},"정리 안 된 것이 없습니다"),
+    h("div",{class:"faint",style:"font-size:12px"},"기록 글에서 「대기」, 「확인 필요」, 「확인하지 못했다」, 「남은 문제」 같은 말이 든 문장을 고른 것입니다. 옵시디언의 작업 로그는 읽기만 하고 고치지 않습니다."));
+  const allC=card("최근 기록",{icon:"news",count:rows.length+"건"},h("div",null,rows.map(r=>h("details",{style:"padding:8px 0;border-top:.5px solid var(--line)"},
+    h("summary",{style:"cursor:pointer"},h("b",null,r.t)," ",h("span",{class:"faint",style:"font-size:12px"},fmtMD(r.d))),
+    h("p",{style:"white-space:pre-wrap;font-size:13px;line-height:1.7;margin:8px 0 0"},r.body)))));
+  return [head,openC,allC];
+}
+
 function setupView(){
   const err=S.setupErr;
   return h("div",{class:"setup"},h("div",{class:"box"},
@@ -2015,7 +2106,8 @@ function render(){
   if(!S.data){$("#app").hidden=true;fill(layer,setupView());restore();return}
   // desk: 뺀 화면(일상, 도구 등)으로 가는 버튼이 원본 곳곳에 남아 있다. 어디서 오든 남긴 화면으로 돌린다
   if(!VIEWS.some(v=>v[0]===S.view))S.view="today";
-  if(S.view!=="att"&&S.pay.open)S.pay={open:false,rows:null,busy:false}; // desk: 근태 화면을 떠나면 급여를 다시 가린다
+  if(S.view!=="att"&&S.pay.open)S.pay={open:false,rows:null,busy:false};
+  if(S.view!=="log"&&S.wlog.rows)S.wlog={rows:null,busy:false,err:null}; // desk: 작업 기록 화면을 떠나면 받아 둔 것을 버린다 // desk: 근태 화면을 떠나면 급여를 다시 가린다
   $("#app").hidden=false;syncProjects();
   const cnt=navCounts();
   fill($("#nav"),h("h6",null,"desk"),VIEWS.map(([k,n,icn],i)=>h("button",{"aria-current":S.view===k?"page":null,onclick:()=>{S.view=k;ls.set("desk:view",k);S.sel=null;render();$("#scroll").scrollTop=0},title:`${n} (${i+1})`},ic(icn),n,cnt[k]?h("span",{class:"c"},cnt[k]):null)),
@@ -2030,7 +2122,7 @@ function render(){
     h("button",{class:"search",onclick:openPalette,"aria-label":"검색 (⌘K)"},ic("search"),h("span",null,"검색·명령"),h("kbd",null,"⌘K")),
     h("button",{class:"btn pri",onclick:()=>openQuick("task")},ic("plus"),"새로 만들기"));
   S.enter=S._pv!==S.view;S._pv=S.view;
-  const views={today:viewToday,work:viewWork,life:viewLife,att:viewAtt,pf:viewPf,job:viewJob,tools:viewTools};
+  const views={today:viewToday,work:viewWork,life:viewLife,att:viewAtt,pf:viewPf,job:viewJob,log:viewLog,tools:viewTools};
   if(S.view!=="pf"&&PF.story!=null)storyClose();
   let content;try{content=(views[S.view]||viewToday)()}catch(e){console.error(e);content=h("div",{class:"banner"},"이 화면을 그리는 중 문제가 생겼습니다: "+e.message)}
   fill($("#page"),...[connBanner(),S.demo?h("div",{class:"banner"},"지금은 예시 데이터입니다. 실제 옵시디언과 연결하려면 ",h("button",{class:"btn sm",onclick:lock},"연결하기"),"를 누르세요."):null,...[].concat(content)].filter(Boolean));
@@ -2087,7 +2179,7 @@ function demoData(){
       {id:id(),t:"예시) 병원 예약",all:false,s:new Date(a(2)+"T14:00:00").toISOString(),e:new Date(a(2)+"T15:00:00").toISOString(),cal:"예시",color:"#bf5af2"}],
     habits:[{id:id(),n:"물 마시기",i:"💧",g:7,on:true,dates:[a(-1),a(-2)].join(",")},{id:id(),n:"운동",i:"🏃",g:3,on:true,dates:a(-2)},{id:id(),n:"독서",i:"📖",g:5,on:true,dates:""}],memos:[{id:id(),t:"예시) 다음 주에 확인할 것 적어 두기",k:"아이디어",pin:true,at:new Date().toISOString()}],
     jobs:[{id:id(),n:"예시) 어느 게임 회사",role:"클라이언트 프로그래머",st:"서류 준비",d:a(9),post:"Unity C# 클라이언트 개발, UI 구현, Steam 출시 경험 우대"}],docs:[],att:[{id:id(),t:"야근",type:"야근",d:a(-1),h:2,taxi:18000,paid:null,reason:"예시) 빌드 마감"},{id:id(),t:"연차",type:"연차",d:a(-6),days:1}],
-    months:[{id:t.slice(0,7),m:t.slice(0,7).replace("-","."),days:1,hours:2,used:1,taxi:18000,unpaid:18000}],leave:[{id:id(),y:t.slice(0,4),total:15,special:0,used:1,left:14}],mail:null,account:"me@example.com",work:null,news:[],logs:[],sorries:[]};
+    months:[{id:t.slice(0,7),m:t.slice(0,7).replace("-","."),days:1,hours:2,used:1,taxi:18000,unpaid:18000}],leave:[{id:id(),y:t.slice(0,4),total:15,special:0,used:1,left:14}],mail:[{id:"dm1",subj:"예시) 채용 공고 안내",from:"어느 게임 회사",at:new Date().toISOString(),snip:"클라이언트 프로그래머를 모집합니다.",unread:true,star:false,n:1},{id:"dm2",subj:"예시) 주말 모임 안내",from:"친구",at:new Date(Date.now()-864e5).toISOString(),snip:"이번 주 토요일 몇 시에 볼까?",unread:false,star:true,n:2}],account:"me@example.com",news:[],logs:[],sorries:[]};
 }
 async function demoApi(action,args){
   await new Promise(r=>setTimeout(r,150));
@@ -2096,6 +2188,9 @@ async function demoApi(action,args){
   if(action==="update")return Object.assign({},byId(S.data[{tasks:"tasks",habit:"habits",memo:"memos",att:"att",job:"jobs",doc:"docs"}[args.kind]]||[],args.id)||{},args.fields);
   if(action==="habitToggle")return byId(S.data.habits,args.id);
   if(action==="history")return demoHist().items;
+  if(action==="mailBody")return [{from:"예시",date:new Date().toISOString(),body:"예시 본문입니다."}];
+  if(action==="jobMail")return [];
+  if(action==="worklog")return {entries:[{d:TODAY(),t:"예시) 설정 화면 정리",body:"글자가 겹치던 곳을 고쳤다. 색을 바꿀지 사용자 확인 대기.",open:["색을 바꿀지 사용자 확인 대기."]},{d:addD(TODAY(),-1),t:"예시) 저장 오류 수정",body:"저장 순서가 뒤바뀌던 것을 고쳤다. 점검 통과.",open:[]}]};
   if(action==="pays")return [{id:"demo-pay",m:TODAY().slice(0,7).replace("-","."),d:TODAY(),g:3000000,ded:400000,net:2600000}];
   if(action==="memoToTask")return {id:"demo-"+Date.now(),t:args.text,d:args.date,s:"시작 전"};
   return {};

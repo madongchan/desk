@@ -46,7 +46,7 @@ function diskFolder(dir) {
 }
 
 /** 가짜 서비스를 끼운 실행 환경에 Note.gs와 Code.gs를 올린다. */
-function makeContext(root, props) {
+function makeContext(root, props, files) {
   let slept = 0, broken = false;
   const created = [];
   const ev = (id, title, allDay, s, e) => ({
@@ -64,9 +64,27 @@ function makeContext(root, props) {
     createAllDayEvent: (t, d) => created.push(['allDay', t, d.toISOString()]),
     createEvent: (t, s, e) => created.push(['timed', t, s.toISOString(), e.toISOString()]),
   };
+  // 가짜 지메일: 대화 두 개
+  let mailBroken = false;
+  const searches = [];
+  const mk = (id, subj, from, unread) => {
+    const th = { _unread: unread, _star: false, _archived: false,
+      getId: () => id, getFirstMessageSubject: () => subj, getLastMessageDate: () => new Date('2026-11-24T01:00:00Z'),
+      isUnread: () => th._unread, hasStarredMessages: () => th._star, isImportant: () => false, getMessageCount: () => 1,
+      markRead() { th._unread = false; }, markUnread() { th._unread = true; }, moveToArchive() { th._archived = true; } };
+    const msg = { getFrom: () => from, getTo: () => 'me@example.com', getCc: () => '', getDate: () => new Date('2026-11-24T01:00:00Z'), getSubject: () => subj,
+      getPlainBody: () => '본문   ' + subj + '\n\n\n\n끝', star() { th._star = true; }, unstar() { th._star = false; } };
+    th.getMessages = () => [msg];
+    return th;
+  };
+  const threads = [mk('t1', '채용 공고 안내', '"어느 회사" <hr@example.com>', true), mk('t2', '', 'f@example.com', false)];
   const ctx = vm.createContext({
+    GmailApp: {
+      search: (q, start, max) => { if (mailBroken) throw new Error('메일 권한이 없습니다'); searches.push(q); return threads.filter(t => !t._archived).slice(0, max); },
+      getThreadById: id => threads.find(t => t.getId() === id) || null,
+    },
     console,
-    DriveApp: { getFolderById: () => root },
+    DriveApp: { getFolderById: () => root, getFileById: id => { if (!files || !files[id]) throw new Error('파일을 찾을 수 없습니다'); return files[id]; } },
     PropertiesService: { getScriptProperties: () => ({ getProperty: k => props[k] || null }) },
     LockService: { getScriptLock: () => ({ waitLock() {}, releaseLock() {} }) },
     Utilities: { sleep: ms => { slept += ms; }, formatDate: d => new Date(d.getTime() + 9 * 3600e3).toISOString().slice(0, 10) },
@@ -77,7 +95,7 @@ function makeContext(root, props) {
   });
   const src = f => fs.readFileSync(path.join(__dirname, '..', 'apps-script', f), 'utf8');
   vm.runInContext(src('Note.gs') + '\n' + src('Code.gs') + '\nthis.doPost = doPost; this.selfCheck = selfCheck;', ctx);
-  return { ctx, slept: () => slept, created: () => created, breakCalendar: b => { broken = b; } };
+  return { ctx, slept: () => slept, created: () => created, breakCalendar: b => { broken = b; }, breakMail: b => { mailBroken = b; }, searches: () => searches };
 }
 
 module.exports = { fakeFolder, diskFolder, makeContext };

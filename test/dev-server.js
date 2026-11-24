@@ -12,7 +12,9 @@ const PORT = 5173;
 const DEV_PASS = 'local-dev-only-password';
 const ROOT = path.join(__dirname, '..');
 const notes = process.argv[2] || path.join(os.tmpdir(), 'desk-dev-notes');
-const g = makeContext(diskFolder(notes), { PASS: DEV_PASS, TODO_FOLDER: 'dev' });
+// 작업 기록 화면을 보려고 넣은 가짜 작업 로그
+const devLog = '## 2026-11-23 저장 오류 수정\n저장 순서가 뒤바뀌던 것을 고쳤다. 점검 통과. 빌드에서는 확인하지 못했다.\n\n## 2026-11-24 설정 화면 정리\n글자가 겹치던 곳을 고쳤다. 색을 바꿀지 사용자 확인 대기.\n';
+const g = makeContext(diskFolder(notes), { PASS: DEV_PASS, TODO_FOLDER: 'dev', LOG_FILE: 'dev-log' }, { 'dev-log': { getBlob: () => ({ getDataAsString: () => devLog }) } });
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.svg': 'image/svg+xml',
   '.png': 'image/png', '.webmanifest': 'application/manifest+json' };
 
