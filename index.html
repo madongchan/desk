@@ -56,7 +56,9 @@ svg.i{width:16px;height:16px;flex:none;fill:none;stroke:currentColor;stroke-widt
   border:.5px solid rgba(255,255,255,.14);box-shadow:0 30px 80px rgba(0,0,0,.55),0 0 0 .5px rgba(0,0,0,.6)}
 .side{background:var(--side);backdrop-filter:blur(40px) saturate(1.6);-webkit-backdrop-filter:blur(40px) saturate(1.6);
   border-right:.5px solid rgba(0,0,0,.5);display:flex;flex-direction:column;min-height:0}
-.lights{display:flex;gap:8px;padding:16px 16px 8px}
+.brand{display:flex;align-items:center;gap:9px;padding:14px 12px 6px 16px}
+.brand img{width:22px;height:22px;border-radius:6px}
+.brand b{font-size:15px;font-weight:600;flex:1}
 .nav{padding:6px 10px;display:grid;gap:1px;overflow:auto;flex:1;min-height:0;align-content:start}
 .nav h6{margin:14px 8px 4px;font-size:11px;font-weight:600;color:var(--fg3);letter-spacing:.02em}
 .nav button{display:flex;align-items:center;gap:9px;border:0;background:transparent;padding:6px 8px;border-radius:7px;text-align:left;font-size:13.5px;color:var(--fg)}
@@ -587,13 +589,9 @@ tr.cur td{background:rgba(10,132,255,.1)}
 .mrow b{font-size:13px;font-weight:500;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .mrow span{font-size:11.5px;color:var(--fg3)}
 
-/* 신호등 */
-.lights button{width:12px;height:12px;border-radius:50%;border:0;padding:0;display:grid;place-items:center;font:700 9px/1 var(--font);color:transparent;box-shadow:inset 0 0 0 .5px rgba(0,0,0,.25)}
-.lights button:nth-child(1){background:#ff5f57}.lights button:nth-child(2){background:#febc2e}.lights button:nth-child(3){background:#28c840}
-.lights:hover button,.lights button:focus-visible{color:rgba(0,0,0,.6)}
+/* 사이드바 접기 */
 .app.focus{grid-template-columns:minmax(0,1fr)}
 .app.focus .side{display:none}
-.toolbar .lights{padding:0 6px 0 0}
 
 /* 날씨 */
 .wx{display:flex;align-items:center;gap:10px;padding:6px 12px;border-radius:12px;background:var(--card);border:.5px solid var(--line)}
@@ -723,7 +721,7 @@ tr.cur td{background:rgba(10,132,255,.1)}
   body{overflow:auto}
   .app{inset:0;border-radius:0;border:0;grid-template-columns:minmax(0,1fr)}
   .side{position:fixed;left:0;right:0;bottom:0;z-index:20;border-right:0;border-top:.5px solid rgba(255,255,255,.12);background:rgba(30,30,32,.8)}
-  .side .lights,.side .nav,.side .sync{display:none}
+  .side .brand,.side .nav,.side .sync{display:none}
   .side-foot{border:0;padding:0}
   .music{position:fixed;right:max(10px,env(safe-area-inset-right));bottom:calc(64px + env(safe-area-inset-bottom));width:220px;z-index:21;background:rgba(44,44,46,.92);backdrop-filter:blur(30px);-webkit-backdrop-filter:blur(30px)}
   .music.mclosed{display:none}
@@ -756,7 +754,7 @@ tr.cur td{background:rgba(10,132,255,.1)}
 <body>
 <div class="app" id="app">
   <aside class="side" aria-label="메뉴">
-    <div class="lights" id="lights"></div>
+    <div class="brand" id="brand"></div>
     <nav class="nav" id="nav"></nav>
     <div class="side-foot">
       <div class="sync" id="sync"></div>
@@ -787,6 +785,7 @@ function h(tag,attrs,...kids){
 // 배열·빈 값이 섞여도 안전하게 자식 교체
 function fill(el,...k){el.replaceChildren(...k.flat(9).filter(x=>x!=null&&x!==false).map(x=>x.nodeType?x:document.createTextNode(String(x))))}
 const ICON={
+  side:'<rect x="2" y="3" width="12" height="10" rx="2"/><path d="M6.2 3v10"/>',
   today:'<circle cx="8" cy="8" r="3"/><path d="M8 1.5v1.5M8 13v1.5M1.5 8H3M13 8h1.5M3.4 3.4l1 1M11.6 11.6l1 1M3.4 12.6l1-1M11.6 4.4l1-1"/>',
   work:'<path d="M5.5 4h8M5.5 8h8M5.5 12h8"/><circle cx="2.5" cy="4" r=".6"/><circle cx="2.5" cy="8" r=".6"/><circle cx="2.5" cy="12" r=".6"/>',
   life:'<path d="M8 14s-5.5-3.2-5.5-7.2A3 3 0 0 1 8 4.6a3 3 0 0 1 5.5 2.2C13.5 10.8 8 14 8 14z"/>',
@@ -1178,7 +1177,7 @@ function memoCard(limit){
   const ms=(S.data.memos||[]).slice().sort((a,b)=>(b.pin-a.pin)||((b.at||"")>(a.at||"")?1:-1));
   const shown=limit?ms.slice(0,limit):ms;
   return card("메모",{icon:"pin",count:ms.length+"개",right:limit?h("button",{class:"btn ghost sm",onclick:()=>{S.view="life";render()}},"전체"):null},
-    limit?null:h("div",{class:"row"},h("textarea",{class:"in grow",id:"m-new",rows:"2",placeholder:"생각을 적고 ⌘/Ctrl+Enter",value:S.drafts["m-new"]||"",oninput:e=>{S.drafts["m-new"]=e.target.value},
+    limit?null:h("div",{class:"row"},h("textarea",{class:"in grow",id:"m-new",rows:"2",placeholder:"생각을 적고 "+KEY.trim()+"+Enter",value:S.drafts["m-new"]||"",oninput:e=>{S.drafts["m-new"]=e.target.value},
       onkeydown:e=>{if(e.key==="Enter"&&(e.metaKey||e.ctrlKey)){const v=(S.drafts["m-new"]||"").trim();if(v){S.drafts["m-new"]="";addMemo(v)}}}}),
       h("button",{class:"btn",onclick:()=>{const v=(S.drafts["m-new"]||"").trim();if(v){S.drafts["m-new"]="";addMemo(v)}}},"남기기")),
     shown.length?h("div",null,shown.map(m=>h("div",{class:"memo"+(m.pin?" pin":"")},h("div",{style:"min-width:0"},h("p",null,m.t),h("div",{class:"meta"},h("span",null,m.k||"메모"),m.at?h("span",null,agoTxt(m.at)):null)),
@@ -1314,11 +1313,12 @@ function withGrip(el){
   el.prepend(g);return el;
 }
 
-/* 신호등: 빨강=잠그기(두 번), 노랑=사이드바 숨기기, 초록=전체 화면 */
-function lightsEl(){let arm=false;
-  return [h("button",{title:"잠그기(두 번 누르기)","aria-label":"잠그기",onclick:e=>{if(arm){lock();return}arm=true;toast("한 번 더 누르면 이 브라우저에서 연결을 지웁니다");setTimeout(()=>arm=false,3000)}},"×"),
-    h("button",{title:"집중 모드(사이드바 숨기기)","aria-label":"집중 모드",onclick:()=>{S.focus=!S.focus;ls.set("desk:focus",S.focus);render()}},"−"),
-    h("button",{title:"전체 화면","aria-label":"전체 화면",onclick:()=>{document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen&&document.documentElement.requestFullscreen().catch(()=>{})}},"+")]}
+/* desk: 원본의 맥 창 버튼 모양 점 세 개를 뺐다(윈도우에서는 뜻을 알 수 없다). 사이드바 접기 버튼 하나로 바꾸고,
+   잠그기는 사이드바 아래 자물쇠에, 전체 화면은 브라우저(F11)에 맡긴다 */
+const MAC=/Mac|iPhone|iPad/.test(navigator.platform);
+const KEY=MAC?"⌘":"Ctrl ";
+function sideBtn(){const n=S.focus?"사이드바 펴기":"사이드바 접기";
+  return h("button",{class:"icon-btn",title:n,"aria-label":n,"aria-pressed":String(!S.focus),onclick:()=>{S.focus=!S.focus;ls.set("desk:focus",S.focus);render()}},ic("side"))}
 
 /* ═════════ 연결 끊김 대비·원인 확인 ═════════ */
 function connBanner(){
@@ -2100,16 +2100,16 @@ function render(){
   if(S.view!=="log"&&S.view!=="work"&&(S.wlog.rows||S.wlog.err))S.wlog={rows:null,busy:false,err:null}; // desk: 작업 기록 화면을 떠나면 받아 둔 것을 버린다 // desk: 근태 화면을 떠나면 급여를 다시 가린다
   $("#app").hidden=false;syncProjects();
   const cnt=navCounts();
-  fill($("#nav"),h("h6",null,"desk"),VIEWS.map(([k,n,icn],i)=>h("button",{"aria-current":S.view===k?"page":null,onclick:()=>{S.view=k;ls.set("desk:view",k);S.sel=null;render();$("#scroll").scrollTop=0},title:`${n} (${i+1})`},ic(icn),n,cnt[k]?h("span",{class:"c"},cnt[k]):null)),
+  fill($("#nav"),VIEWS.map(([k,n,icn],i)=>h("button",{"aria-current":S.view===k?"page":null,onclick:()=>{S.view=k;ls.set("desk:view",k);S.sel=null;render();$("#scroll").scrollTop=0},title:`${n} (${i+1})`},ic(icn),n,cnt[k]?h("span",{class:"c"},cnt[k]):null)),
     h("h6",null,"프로젝트"),PVIEWS.map(([k,n,,col])=>h("button",{"aria-current":S.view===k?"page":null,onclick:()=>{S.view=k;ls.set("desk:view",k);S.sel=null;render();$("#scroll").scrollTop=0}},h("span",{class:"dot",style:`background:${col}`}),h("span",{style:"overflow:hidden;text-overflow:ellipsis;white-space:nowrap"},n),cnt[k]?h("span",{class:"c"},cnt[k]):null)),
     projStats().filter(o=>o.total>o.done).slice(0,8).map(o=>h("button",{onclick:()=>{S.view="work";S.f.p=o.p;S.f.mode="list";render()}},h("span",{class:"dot",style:`background:${PCOL[o.p]||"var(--gray)"}`}),h("span",{style:"overflow:hidden;text-overflow:ellipsis;white-space:nowrap"},o.p),h("span",{class:"c"},o.total-o.done||""))));
   fill($("#tabbar"),[...VIEWS,...PVIEWS].map(([k,n,icn])=>h("button",{"aria-current":S.view===k?"page":null,onclick:()=>{S.view=k;ls.set("desk:view",k);render();$("#scroll").scrollTop=0}},ic(icn),n)));
   const V=[...VIEWS,...PVIEWS].find(v=>v[0]===S.view)||VIEWS[0];
   $("#app").classList.toggle("focus",!!S.focus);
-  fill($("#lights"),lightsEl());
-  fill($("#toolbar"),S.focus?h("div",{class:"lights"},lightsEl()):null,h("h1",null,V[1]),S.demo?h("span",{class:"pill orange"},"예시 데이터"):null,h("span",{class:"sp"}),
+  fill($("#brand"),h("img",{src:"icon.svg",alt:""}),h("b",null,"desk"),sideBtn());
+  fill($("#toolbar"),S.focus?sideBtn():null,h("h1",null,V[1]),S.demo?h("span",{class:"pill orange"},"예시 데이터"):null,h("span",{class:"sp"}),
     TM.run?h("button",{class:"btn sm",onclick:()=>{S.view="tools";render()}},ic("tools"),h("span",{class:"num",id:"tm-mini"},tmFmt(tmLeft()))):null,
-    h("button",{class:"search",onclick:openPalette,"aria-label":"검색 (⌘K)"},ic("search"),h("span",null,"검색·명령"),h("kbd",null,"⌘K")),
+    h("button",{class:"search",onclick:openPalette,"aria-label":"검색 ("+KEY+"K)"},ic("search"),h("span",null,"검색·명령"),h("kbd",null,KEY+"K")),
     h("button",{class:"btn pri",onclick:()=>openQuick("task")},ic("plus"),"새로 만들기"));
   S.enter=S._pv!==S.view;S._pv=S.view;
   const views={today:viewToday,work:viewWork,life:viewLife,att:viewAtt,pf:viewPf,job:viewJob,log:viewLog,tools:viewTools};
