@@ -5,6 +5,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 
 const iter = a => { let i = 0; return { hasNext: () => i < a.length, next: () => a[i++] }; };
+const byId = {};   // 가짜 드라이브의 파일 번호 → 파일. 서버가 찾은 번호를 기억했다가 다시 열 때 쓴다
 
 /** 메모리 안의 가짜 드라이브 폴더. */
 function fakeFolder(name) {
@@ -17,8 +18,10 @@ function fakeFolder(name) {
     createFile: (n, t) => {
       let text = t;
       // getLastUpdated는 기본으로 오래전이다. 점검에서 "방금 고친 파일"을 흉내 낼 때만 바꿔 끼운다
-      const f = { getName: () => n, isTrashed: () => false, getLastUpdated: () => new Date(0), getBlob: () => ({ getDataAsString: () => text, getBytes: () => Buffer.from(text) }), setContent: v => { text = v; } };
+      const id = 'mem-' + Object.keys(byId).length;
+      const f = { getName: () => n, getId: () => id, isTrashed: () => false, getLastUpdated: () => new Date(0), getBlob: () => ({ getDataAsString: () => text, getBytes: () => Buffer.from(text) }), setContent: v => { text = v; } };
       files.push(f);
+      byId[id] = f;
       return f;
     },
     getFoldersByName: n => iter(subs.filter(s => s.getName() === n)),
@@ -30,7 +33,7 @@ function fakeFolder(name) {
 function diskFolder(dir) {
   fs.mkdirSync(dir, { recursive: true });
   const file = n => ({
-    getName: () => n, isTrashed: () => false, getLastUpdated: () => fs.statSync(path.join(dir, n)).mtime,
+    getName: () => n, getId: () => { const id = 'disk-' + path.join(dir, n); byId[id] = file(n); return id; }, isTrashed: () => false, getLastUpdated: () => fs.statSync(path.join(dir, n)).mtime,
     getBlob: () => ({ getDataAsString: () => fs.readFileSync(path.join(dir, n), 'utf8'), getBytes: () => fs.readFileSync(path.join(dir, n)) }),
     setContent: v => fs.writeFileSync(path.join(dir, n), v),
   });
@@ -94,7 +97,7 @@ function makeContext(root, props, files) {
     console,
     // 번호로 찾기와, 내 드라이브 맨 위(getRootFolder)에서 이름으로 찾아 들어가기 둘 다 흉내 낸다
     DriveApp: { getFolderById: id => { lookups.push('id:' + id); return root; }, getRootFolder: () => { lookups.push('root'); return top; },
-      getFileById: id => { if (!files || !files[id]) throw new Error('파일을 찾을 수 없습니다'); return files[id]; } },
+      getFileById: id => { const f = (files && files[id]) || byId[id]; if (!f) throw new Error('파일을 찾을 수 없습니다'); return f; } },
     CacheService: { getScriptCache: () => ({ get: k => (k in cache ? cache[k] : null), put: (k, v) => { cache[k] = v; } }) },
     PropertiesService: { getScriptProperties: () => ({ getProperty: k => props[k] || null }) },
     LockService: { getScriptLock: () => ({ waitLock() {}, releaseLock() {} }) },

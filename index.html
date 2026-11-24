@@ -2153,8 +2153,10 @@ function libNote(o){
     card("노트 전문",{icon:"news",count:o.imgs.length?"그림 "+o.imgs.length+"장":""},h("div",{class:"md"},libMd(body,o)))].filter(Boolean);
 }
 function libSteps(body){
-  const out=[];let cur=null;
-  body.split(/\r?\n/).forEach(l=>{const t=l.trim(),m=/^##\s+(.+)$/.exec(t);
+  const out=[];let cur=null,code=false;
+  body.split(/\r?\n/).forEach(l=>{const t=l.trim();
+    if(t.startsWith("```")){code=!code;return}if(code)return; // 코드 블록 안의 글은 단계 설명에 넣지 않는다
+    const m=/^##\s+(.+)$/.exec(t);
     if(m){cur={hd:mdPlain(m[1].trim()),k:stageOf(m[1]),tx:[]};out.push(cur);return}
     if(!cur||!t||/^(#|!\[|---|>)/.test(t)||/^\|[\s:|-]+\|$/.test(t))return;
     if(t[0]==="|"){cur.tx.push(t.replace(/^\||\|$/g,"").split("|").map(c=>c.trim()).filter(Boolean).join(" · ")+".");return} // 표로만 적은 절도 단계에 넣는다

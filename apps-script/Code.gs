@@ -13,7 +13,7 @@
  */
 
 const TZ = 'Asia/Seoul';
-const VERSION = '2026-11-24q';
+const VERSION = '2026-11-24r';
 const WORK_FILE = '작업 목록.json';   // PC의 tools/sync-vault.js가 쓰는 파일. 서버는 읽기만 한다
 const GIT_FILE = '작업 내역.md';   // PC의 tools/sync-git.js가 쓰는 파일. 서버는 읽기만 한다
 // PC에서 고친 지 이만큼 안 지난 파일에는 읽으면서 번호를 붙여 쓰지 않는다. 옵시디언이 아직 쓰는 중일 수 있다
@@ -188,14 +188,18 @@ function vault_(folder) {
 
 /**
  * 폴더 아래의 경로(슬래시)를 이름으로 따라가 파일을 찾는다.
- * ponytail: 부를 때마다 단계 수만큼 드라이브를 찾는다(노트 하나에 1초쯤). 느리면 찾은 번호를 CacheService에 기억시킨다.
+ * 이름으로 찾아 내려가는 것은 느려서(실측 노트 하나에 5초) 한 번 찾은 파일의 번호를 6시간 기억한다.
  */
 function under_(base, rel) {
+  const cache = CacheService.getScriptCache(), key = 'u:' + rel;
+  const known = key.length <= 240 ? cache.get(key) : null;   // 캐시 열쇠는 250자까지다. 더 긴 경로는 매번 찾는다
+  if (known) { try { return DriveApp.getFileById(known); } catch (err) { /* 옮겨졌거나 지워졌으면 다시 찾는다 */ } }
   const parts = rel.split('/').filter(function (s) { return s; });
   let at = base;
   for (let i = 0; i < parts.length; i++) {
     at = onlyOne_(i === parts.length - 1 ? at.getFilesByName(parts[i]) : at.getFoldersByName(parts[i]), parts[i]);
   }
+  if (key.length <= 240) cache.put(key, at.getId(), 21600);
   return at;
 }
 

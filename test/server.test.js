@@ -310,6 +310,11 @@ const idx = root.createFile('작업 목록.json', JSON.stringify({ at: 'T', note
 r = post('works', {});
 assert.deepStrictEqual([r.data.at, r.data.notes.length, r.data.notes[0].t, 'm' in r.data.notes[0]], ['T', 1, '저장 수정', false]);
 assert.strictEqual(post('workNote', { path: 'entities/게임/저장 수정.md' }).data.text, '# 저장 수정\n![[구조.svg]]\n');
+// 한 번 찾은 노트는 번호를 기억해, 다음에는 폴더를 이름으로 찾아 내려가지 않는다
+const walk = wk.getFilesByName;
+wk.getFilesByName = () => { throw new Error('다시 찾아 내려갔다'); };
+assert.strictEqual(post('workNote', { path: 'entities/게임/저장 수정.md' }).data.text, '# 저장 수정\n![[구조.svg]]\n');
+wk.getFilesByName = walk;
 assert.match(post('workNote', { path: 'entities/게임/목록에 없는 노트.md' }).error, /목록에 없는/);
 assert.match(post('workNote', { path: '../desk/급여.md' }).error, /목록에 없는/);
 r = post('workImg', { path: 'entities/게임/Docs/구조.svg' });
