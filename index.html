@@ -222,7 +222,7 @@ select.in{padding-right:24px}
 .wk-ev{font-size:11.5px;padding:3px 6px;border-radius:5px;background:rgba(10,132,255,.2);color:#cfe5ff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .wk-ev b{font-weight:600;font-family:var(--num);margin-right:4px}
 /* 달력 종류별 색: 진한 덩어리 대신 왼쪽 띠+옅은 바탕+글자색 */
-.k-team{--kc:#30d158}.k-work{--kc:#0a84ff}.k-me{--kc:#bf5af2}.k-hol{--kc:#ff6961}.k-task{--kc:#ffd60a}
+.k-team{--kc:#30d158}.k-work{--kc:#0a84ff}.k-me{--kc:#bf5af2}.k-sh{--kc:#30d158}.k-hol{--kc:#ff6961}.k-task{--kc:#ffd60a}
 .wk-ev[class*=" k-"],.mi.ev[class*=" k-"],.daypop .dr.ev[class*=" k-"]{background:color-mix(in srgb,var(--kc) 16%,transparent);color:color-mix(in srgb,var(--kc) 55%,#fff);box-shadow:inset 2px 0 0 var(--kc)}
 .mi.t.k-task,.wk-t.k-task,.daypop .dr.t.k-task{box-shadow:inset 2px 0 0 color-mix(in srgb,var(--kc) 70%,transparent)}
 .mi.t.k-task.done,.wk-t.k-task.done,.daypop .dr.t.k-task.done{box-shadow:none}
@@ -978,8 +978,9 @@ function card(title,opts,...body){opts=opts||{};
 function allEvents(){return (S.data.events||[]).map(e=>Object.assign({},e,{k:evKind(e,false)}))}
 // 달력 종류: 팀(팀 공유 캘린더)·회사(회사 계정)·개인(개인 계정)·공휴일·할 일(옵시디언)
 // desk: 구글 계정이 하나라 팀, 회사 구분을 뺐다. 일정, 공휴일, 할 일 셋으로 가른다
-const CALK=[["me","일정"],["hol","공휴일"],["task","할 일"]];
-function evKind(e,co){const n=e.cal||"";if(/휴일|holiday/i.test(n))return "hol";return "me"}
+// desk: 내 캘린더와 남이 공유해 준 캘린더(가족 등)를 갈라 따로 끌 수 있게 한다. 주인 여부는 서버가 준다(e.mine)
+const CALK=[["me","내 일정"],["sh","공유 일정"],["hol","공휴일"],["task","할 일"]];
+function evKind(e,co){const n=e.cal||"";if(/휴일|holiday/i.test(n))return "hol";return e.mine===false?"sh":"me"}
 S.calHide=ls.get("desk:calHide",[]); // 화면 편의(보기 필터)라 브라우저에만 저장
 const calOn=k=>!S.calHide.includes(k);
 function calEvs(day){return eventsOn(day).filter(e=>calOn(e.k))}
@@ -995,7 +996,7 @@ function viewToday(){
   const overdue=open.filter(t=>t.d&&dOf(t.d)<today&&!isDec(t)).sort((a,b)=>a.d<b.d?-1:1);
   const todays=tasksOn(today).filter(t=>!isDec(t)).sort((a,b)=>(isDone(a)-isDone(b))||((tOf(a.d)||"99")<(tOf(b.d)||"99")?-1:1));
   const decs=open.filter(isDec);
-  const evs=eventsOn(today);
+  const evs=calEvs(today); // desk: 꺼 둔 종류는 대시보드에서도 뺀다
   const wk=open.filter(t=>t.d&&dOf(t.d)>today&&dOf(t.d)<=addD(today,7)).length;
   const doneToday=todays.filter(isDone).length;
 
@@ -1186,7 +1187,7 @@ function desktopNotify(title,body,tag){if(!canNotify())return;try{const n=new No
 // 일정 10분 전 알림(대시보드가 열려 있을 때)
 const notified=new Set(ls.get("desk:notified",[]));
 function notifyEvents(){if(!canNotify()||!S.data)return;const now=Date.now();
-  allEvents().forEach(e=>{if(e.all)return;const st=Date.parse(e.s),k=e.id+e.s;if(st-now<=10*60e3&&st-now>-60e3&&!notified.has(k)){notified.add(k);ls.set("desk:notified",[...notified].slice(-200));desktopNotify(e.t,`${tOf(e.s)} 시작${e.loc?" · "+e.loc:""}`,k)}})}
+  allEvents().filter(e=>calOn(e.k)).forEach(e=>{if(e.all)return;const st=Date.parse(e.s),k=e.id+e.s;if(st-now<=10*60e3&&st-now>-60e3&&!notified.has(k)){notified.add(k);ls.set("desk:notified",[...notified].slice(-200));desktopNotify(e.t,`${tOf(e.s)} 시작${e.loc?" · "+e.loc:""}`,k)}})}
 setInterval(notifyEvents,60e3);
 
 /* ═════════ 검사 창 ═════════ */
@@ -1382,7 +1383,7 @@ function habitsCard(compact){
 }
 
 function viewLife(){
-  const today=TODAY(),evs=allEvents().filter(e=>(e.all?(e.e||e.s):dOf(e.s))>=today).sort((a,b)=>a.s<b.s?-1:1).slice(0,40);
+  const today=TODAY(),evs=allEvents().filter(e=>calOn(e.k)&&(e.all?(e.e||e.s):dOf(e.s))>=today).sort((a,b)=>a.s<b.s?-1:1).slice(0,40);
   const byDay={};evs.forEach(e=>{const k=e.all&&e.s<today?today:dOf(e.s);(byDay[k]=byDay[k]||[]).push(e)});
   const cal=card("개인 일정",{icon:"cal",count:"구글 캘린더",cls:"pj-done",right:h("a",{class:"btn ghost sm",href:"https://calendar.google.com",target:"_blank",rel:"noopener"},"캘린더 열기",ic("ext"))},
     S.data.calError?h("div",{class:"banner"},"캘린더를 읽지 못했습니다: "+S.data.calError):null,

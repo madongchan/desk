@@ -29,6 +29,11 @@ PROPS.PASS = '012345678';
 assert.strictEqual(post('ping', {}, '012345678').ok, true);
 PROPS.PASS = PASS;
 
+// 남이 공유해 준 캘린더의 일정은 mine이 false로 온다
+g.ownCalendar(false);
+assert.deepStrictEqual(post('load', {}).data.events.map(e => e.mine), [false, false]);
+g.ownCalendar(true);
+
 // 모르는 동작, 객체에 원래 있는 이름
 assert.match(post('nope', {}).error, /알 수 없는 동작/);
 assert.match(post('constructor', {}).error, /알 수 없는 동작/);
@@ -43,8 +48,8 @@ assert.strictEqual(root._files.length, 0);
 assert.deepStrictEqual([r.data.today, r.data.notion, r.data.tasks, r.data.memos], [today, true, [], []]);
 ['habits', 'jobs', 'att', 'months', 'leave', 'news', 'logs', 'sorries', 'scans'].forEach(k => assert.deepStrictEqual(r.data[k], [], k));
 assert.deepStrictEqual(r.data.events, [
-  { id: 'e1', t: '회의', all: false, s: '2026-11-24T05:00:00.000Z', e: '2026-11-24T06:00:00.000Z', cal: '내 캘린더', color: '#0a84ff', loc: '' },
-  { id: 'e2', t: '마감', all: true, s: '2026-11-25', e: '2026-11-25', cal: '내 캘린더', color: '#0a84ff', loc: '' },
+  { id: 'e1', t: '회의', all: false, s: '2026-11-24T05:00:00.000Z', e: '2026-11-24T06:00:00.000Z', cal: '내 캘린더', color: '#0a84ff', loc: '', mine: true },
+  { id: 'e2', t: '마감', all: true, s: '2026-11-25', e: '2026-11-25', cal: '내 캘린더', color: '#0a84ff', loc: '', mine: true },
 ]);
 
 // 추가: 화면이 준 항목 그대로 돌려주고 번호를 붙인다

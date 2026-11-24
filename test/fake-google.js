@@ -47,7 +47,7 @@ function diskFolder(dir) {
 
 /** 가짜 서비스를 끼운 실행 환경에 Note.gs와 Code.gs를 올린다. */
 function makeContext(root, props, files) {
-  let slept = 0, broken = false;
+  let slept = 0, broken = false, owned = true;
   const created = [];
   const ev = (id, title, allDay, s, e) => ({
     getId: () => id, getTitle: () => title, isAllDayEvent: () => allDay, getLocation: () => '',
@@ -55,7 +55,7 @@ function makeContext(root, props, files) {
     getAllDayStartDate: () => new Date(s), getAllDayEndDate: () => new Date(e),
   });
   const cal = {
-    getName: () => '내 캘린더', getColor: () => '#0a84ff', isHidden: () => false,
+    getName: () => '내 캘린더', getColor: () => '#0a84ff', isHidden: () => false, isOwnedByMe: () => owned,
     getEvents: () => {
       if (broken) throw new Error('캘린더 권한이 없습니다');
       return [ev('e1', '회의', false, '2026-11-24T05:00:00Z', '2026-11-24T06:00:00Z'),
@@ -104,7 +104,7 @@ function makeContext(root, props, files) {
   });
   const src = f => fs.readFileSync(path.join(__dirname, '..', 'apps-script', f), 'utf8');
   vm.runInContext(src('Note.gs') + '\n' + src('Code.gs') + '\nthis.doPost = doPost; this.selfCheck = selfCheck;', ctx);
-  return { ctx, slept: () => slept, created: () => created, breakCalendar: b => { broken = b; }, breakMail: b => { mailBroken = b; }, searches: () => searches, lookups: () => lookups, top: top };
+  return { ctx, slept: () => slept, created: () => created, breakCalendar: b => { broken = b; }, ownCalendar: b => { owned = b; }, breakMail: b => { mailBroken = b; }, searches: () => searches, lookups: () => lookups, top: top };
 }
 
 module.exports = { fakeFolder, diskFolder, makeContext };
