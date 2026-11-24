@@ -6,14 +6,14 @@
  * 구글 드라이브 안 옵시디언 볼트의 desk/ 폴더 노트다.
  *
  * 설정(처음 1번) — 자세한 순서는 README.md
- *   스크립트 속성  PASS        = 비밀번호(11글자 이상)
+ *   스크립트 속성  PASS        = 비밀번호(9글자 이상)
  *                  TODO_FOLDER = 볼트 desk 폴더의 위치. 경로(Z:\ObsidianFolder\desk)나 드라이브 번호
  *                  LOG_FILE    = (선택) 작업 로그 파일의 위치. 경로(Z:\ObsidianFolder\log.md)나 드라이브 번호
  *   배포 → 웹 앱 / 실행: 나 / 액세스: 모든 사용자
  */
 
 const TZ = 'Asia/Seoul';
-const VERSION = '2026-11-24l';
+const VERSION = '2026-11-24m';
 // PC에서 고친 지 이만큼 안 지난 파일에는 읽으면서 번호를 붙여 쓰지 않는다. 옵시디언이 아직 쓰는 중일 수 있다
 const FRESH_MS = 2 * 60 * 1000;
 const TRASH = '휴지통.md';
@@ -51,7 +51,7 @@ function out_(o) {
 function checkPass_(pass) {
   const real = PropertiesService.getScriptProperties().getProperty('PASS');
   if (!real) return '서버에 PASS(비밀번호)가 설정되지 않았습니다';
-  if (real.length < 11) return '서버의 PASS(비밀번호)를 11글자 이상으로 정해 주세요';
+  if (real.length < 9) return '서버의 PASS(비밀번호)를 9글자 이상으로 정해 주세요';
   if (String(pass == null ? '' : pass) !== real) { Utilities.sleep(2000); return '비밀번호가 맞지 않습니다'; }
   return null;
 }
