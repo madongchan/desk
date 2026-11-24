@@ -29,7 +29,7 @@ PROPS.PASS = '012345678';
 assert.strictEqual(post('ping', {}, '012345678').ok, true);
 PROPS.PASS = PASS;
 
-// 남이 공유해 준 캘린더의 일정은 mine이 false로 온다
+// 내 계정이 만든 일정만 mine이다(메일 대소문자는 가리지 않는다). 남이 내 캘린더에 적은 일정은 false로 온다
 g.ownCalendar(false);
 assert.deepStrictEqual(post('load', {}).data.events.map(e => e.mine), [false, false]);
 g.ownCalendar(true);

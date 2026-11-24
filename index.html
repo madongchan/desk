@@ -973,7 +973,7 @@ function card(title,opts,...body){opts=opts||{};
 function allEvents(){return (S.data.events||[]).map(e=>Object.assign({},e,{k:evKind(e,false)}))}
 // 달력 종류: 팀(팀 공유 캘린더)·회사(회사 계정)·개인(개인 계정)·공휴일·할 일(옵시디언)
 // desk: 구글 계정이 하나라 팀, 회사 구분을 뺐다. 일정, 공휴일, 할 일 셋으로 가른다
-// desk: 내 캘린더와 남이 공유해 준 캘린더(가족 등)를 갈라 따로 끌 수 있게 한다. 주인 여부는 서버가 준다(e.mine)
+// desk: 내가 만든 일정과 남(가족 등)이 만든 일정을 갈라 따로 끌 수 있게 한다. 누가 만들었는지는 서버가 준다(e.mine)
 const CALK=[["me","내 일정"],["sh","공유 일정"],["hol","공휴일"],["task","할 일"]];
 function evKind(e,co){const n=e.cal||"";if(/휴일|holiday/i.test(n))return "hol";return e.mine===false?"sh":"me"}
 S.calHide=ls.get("desk:calHide",[]); // 화면 편의(보기 필터)라 브라우저에만 저장

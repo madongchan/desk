@@ -13,7 +13,7 @@
  */
 
 const TZ = 'Asia/Seoul';
-const VERSION = '2026-11-24n';
+const VERSION = '2026-11-24o';
 // PC에서 고친 지 이만큼 안 지난 파일에는 읽으면서 번호를 붙여 쓰지 않는다. 옵시디언이 아직 쓰는 중일 수 있다
 const FRESH_MS = 2 * 60 * 1000;
 const TRASH = '휴지통.md';
@@ -175,12 +175,10 @@ function checkKind_(kind) {
 /* ───────── 구글 캘린더 ───────── */
 function calendarEvents_(from, to) {
   const start = new Date(from + 'T00:00:00+09:00'), end = new Date(to + 'T23:59:59+09:00');
-  const out = [];
+  const out = [], me = account_().toLowerCase();
   CalendarApp.getAllCalendars().forEach(function (cal) {
     if (cal.isHidden && cal.isHidden()) return;
     let evs = [];
-    // 내가 주인인 캘린더인가. 남이 공유해 준 캘린더(가족 등)의 일정을 화면이 따로 가르고 끌 수 있게 한다
-    const mine = cal.isOwnedByMe();
     try { evs = cal.getEvents(start, end); } catch (e) { return; }
     evs.forEach(function (ev) {
       const all = ev.isAllDayEvent();
@@ -188,7 +186,10 @@ function calendarEvents_(from, to) {
         id: ev.getId(), t: ev.getTitle(), all: all,
         s: all ? ymd_(ev.getAllDayStartDate()) : ev.getStartTime().toISOString(),
         e: all ? ymd_(new Date(ev.getAllDayEndDate().getTime() - 1)) : ev.getEndTime().toISOString(),
-        cal: cal.getName(), color: cal.getColor(), loc: ev.getLocation() || '', mine: mine,
+        cal: cal.getName(), color: cal.getColor(), loc: ev.getLocation() || '',
+        // 내 계정이 만든 일정인가. 가족이 내 캘린더에 직접 적은 일정을 화면이 따로 가르고 끌 수 있게 한다.
+        // 캘린더의 주인으로는 가를 수 없다(남이 적어도 내 캘린더의 일정이다)
+        mine: ev.getCreators().some(function (c) { return String(c).toLowerCase() === me; }),
       });
     });
   });

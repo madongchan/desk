@@ -50,12 +50,12 @@ function makeContext(root, props, files) {
   let slept = 0, broken = false, owned = true;
   const created = [];
   const ev = (id, title, allDay, s, e) => ({
-    getId: () => id, getTitle: () => title, isAllDayEvent: () => allDay, getLocation: () => '',
+    getId: () => id, getTitle: () => title, isAllDayEvent: () => allDay, getLocation: () => '', getCreators: () => [owned ? 'Me@Example.com' : 'other@example.com'],
     getStartTime: () => new Date(s), getEndTime: () => new Date(e),
     getAllDayStartDate: () => new Date(s), getAllDayEndDate: () => new Date(e),
   });
   const cal = {
-    getName: () => '내 캘린더', getColor: () => '#0a84ff', isHidden: () => false, isOwnedByMe: () => owned,
+    getName: () => '내 캘린더', getColor: () => '#0a84ff', isHidden: () => false,
     getEvents: () => {
       if (broken) throw new Error('캘린더 권한이 없습니다');
       return [ev('e1', '회의', false, '2026-11-24T05:00:00Z', '2026-11-24T06:00:00Z'),
