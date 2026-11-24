@@ -100,6 +100,13 @@ assert.deepStrictEqual(r.data.tasks.map(t => t.t), ['첫 일 둘째 줄', '손�
 r = post('history', {});
 assert.deepStrictEqual(r.data.map(t => t.t), ['옛날에 끝낸 일', '옛날에 끝낸 자랑', '첫 일 둘째 줄']);   // 날짜순
 assert.deepStrictEqual(Object.keys(r.data[0]).sort(), ['d', 'id', 'k', 'out', 'p', 'r', 's', 'star', 't', 'y']);
+// PC가 만든 작업 내역 파일이 있으면 끝낸 일 목록에 커밋을 얹어 준다. 서버는 그 파일을 읽기만 한다
+const gitFile = root.createFile('작업 내역.md', '- 2020-01-01 a1b2c3d 게임 | feat : 아주 옛날 커밋\n');
+gitFile.setContent = () => { throw new Error('작업 내역은 읽기만 한다'); };
+r = post('history', {});
+assert.deepStrictEqual(r.data.map(t => t.t), ['아주 옛날 커밋', '옛날에 끝낸 일', '옛날에 끝낸 자랑', '첫 일 둘째 줄']);
+assert.deepStrictEqual([r.data[0].git, r.data[0].y, r.data[0].p], [true, '기능', '게임']);
+root._files.splice(root._files.indexOf(gitFile), 1);
 
 // 끝낸 날을 적고 그 날 기준으로 60일을 센다. 날짜가 없거나 오래 밀린 일을 오늘 끝내도 화면에서 사라지지 않는다
 r = post('add', { kind: 'tasks', fields: { t: '날짜 없는 일' } });

@@ -142,4 +142,15 @@ assert.strictEqual(N.parseLog(LOG, 2).length, 2);
 assert.deepStrictEqual(N.parseLog('', 10), []);
 assert.ok(N.parseLog('## 2026-11-24 긴 기록\n' + '가'.repeat(5000), 10)[0].body.length <= 2001);
 
+/* ── 작업 내역 읽기: PC가 깃 기록에서 만든 줄을 끝낸 일과 같은 모양으로 바꾼다 ── */
+const GIT = ['# 작업 내역', '손으로 쓴 줄은 건너뛴다', '',
+  '- 2026-11-24 a1b2c3d 게임 | feat : 창고 정렬 추가', '- 2026-11-23 b2c3d4e 게임 | FIX: 저장 순서 수정',
+  '- 2026-11-23 c3d4e5f 게임 | local : 설명 문구 수정', '- 2026-11-22 d4e5f6a 도구 | 머리말 없는 제목', '- 날짜가 없는 줄'].join('\r\n');
+const cm = N.parseCommits(GIT);
+assert.deepStrictEqual(cm.map(c => [c.d, c.p, c.y, c.t]), [
+  ['2026-11-24', '게임', '기능', '창고 정렬 추가'], ['2026-11-23', '게임', '버그', '저장 순서 수정'],
+  ['2026-11-23', '게임', '기타', 'local : 설명 문구 수정'], ['2026-11-22', '도구', '기타', '머리말 없는 제목']]);   // 모르는 머리말은 제목에 남긴다
+assert.deepStrictEqual([cm[0].id, cm[0].s, cm[0].git], ['git-a1b2c3d', '완료', true]);
+assert.deepStrictEqual(N.parseCommits(''), []);
+
 console.log('note.test.js 통과');

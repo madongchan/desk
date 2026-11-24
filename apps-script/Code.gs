@@ -13,7 +13,8 @@
  */
 
 const TZ = 'Asia/Seoul';
-const VERSION = '2026-11-24o';
+const VERSION = '2026-11-24p';
+const GIT_FILE = '작업 내역.md';   // PC의 tools/sync-git.js가 쓰는 파일. 서버는 읽기만 한다
 // PC에서 고친 지 이만큼 안 지난 파일에는 읽으면서 번호를 붙여 쓰지 않는다. 옵시디언이 아직 쓰는 중일 수 있다
 const FRESH_MS = 2 * 60 * 1000;
 const TRASH = '휴지통.md';
@@ -249,9 +250,12 @@ const ACTIONS = {
 
   history: function (a, folder) {
     const text = withLock_(function () { return open_(folder, 'tasks'); });
+    // PC가 깃 기록에서 만든 작업 내역 파일이 있으면 커밋도 끝낸 일로 얹는다. 그 파일은 읽기만 한다
+    const commits = parseCommits(readText_(folder, GIT_FILE) || '');
     return rows_(text, 'tasks').filter(function (t) { return t.s === DONE; })
-      .sort(function (x, y) { return (x.d || '') < (y.d || '') ? -1 : (x.d || '') > (y.d || '') ? 1 : 0; })
-      .map(function (o) { return { id: o.id, t: o.t, d: o.d, p: o.p, y: o.y, k: o.k, r: o.r, out: o.out, star: o.star, s: o.s }; });
+      .map(function (o) { return { id: o.id, t: o.t, d: o.d, p: o.p, y: o.y, k: o.k, r: o.r, out: o.out, star: o.star, s: o.s }; })
+      .concat(commits)
+      .sort(function (x, y) { return (x.d || '') < (y.d || '') ? -1 : (x.d || '') > (y.d || '') ? 1 : 0; });
   },
 
   add: function (a, folder) {

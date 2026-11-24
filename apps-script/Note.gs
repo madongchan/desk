@@ -277,9 +277,30 @@ function parseLog(text, limit) {
   });
 }
 
+// 작업 내역 한 줄: "- 날짜 커밋번호 프로젝트 | 제목". PC의 tools/sync-git.js가 깃 기록에서 만든다
+const COMMIT_RE = /^- (\d{4}-\d{2}-\d{2}) ([0-9a-f]{7,40}) (\S+) \| (.+?)\s*$/;
+// 커밋 제목 머리말을 화면의 업무 유형으로 바꾼다. 여기 없는 머리말은 「기타」로 두고 제목에 남긴다
+const COMMIT_TYPES = { feat: '기능', fix: '버그', refactor: '리팩토링', docs: '문서', ui: 'UI', style: 'UI' };
+
+/**
+ * 작업 내역 파일의 글을 끝낸 일과 같은 모양의 목록으로 바꾼다. 파일에 적힌 순서(최근 것부터) 그대로다.
+ * 포트폴리오 화면이 끝낸 일 목록 하나로 통계를 그리므로, 같은 모양으로 주면 화면을 고치지 않아도 된다.
+ */
+function parseCommits(text) {
+  const out = [];
+  splitLines_(text).lines.forEach(function (line) {
+    const m = COMMIT_RE.exec(line);
+    if (!m) return;
+    const head = /^([A-Za-z]+)\s*:\s*(.+)$/.exec(m[4]);
+    const type = head && COMMIT_TYPES[head[1].toLowerCase()];
+    out.push({ id: 'git-' + m[2], t: type ? head[2] : m[4], d: m[1], p: m[3], y: type || '기타', s: DONE, git: true });
+  });
+  return out;
+}
+
 if (typeof module !== 'undefined') {
   module.exports = {
     KINDS: KINDS, listRecords: listRecords, ensureIds: ensureIds, addRecord: addRecord,
-    updateRecord: updateRecord, takeRecord: takeRecord, cleanTitle: cleanTitle, parseLog: parseLog,
+    updateRecord: updateRecord, takeRecord: takeRecord, cleanTitle: cleanTitle, parseLog: parseLog, parseCommits: parseCommits,
   };
 }

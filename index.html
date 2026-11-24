@@ -1114,7 +1114,7 @@ let wqT;
 function viewWork(){
   const f=S.f;
   const bar=h("div",{class:"row"},
-    h("div",{class:"seg",role:"group","aria-label":"보기"},[["list","목록"],["board","상태 보드"],["done","완료 기록"]].map(([k,n])=>h("button",{"aria-pressed":String(f.mode===k),onclick:()=>{f.mode=k;render()}},n))),
+    h("div",{class:"seg",role:"group","aria-label":"보기"},[["list","목록"],["board","상태 보드"],["done","완료 기록"],["git","작업 내역"]].map(([k,n])=>h("button",{"aria-pressed":String(f.mode===k),onclick:()=>{f.mode=k;render()}},n))),
     h("input",{class:"in grow",id:"w-q",type:"search",placeholder:"업무 검색 (제목·세부 업무·비고)",value:f.q,style:"max-width:320px",
       oninput:e=>{f.q=e.target.value;clearTimeout(wqT);wqT=setTimeout(()=>{const b=$("#w-body");if(b)fill(b,workBody())},200)}}),
     sel("w-p","프로젝트 전체",PROJECTS,f.p,v=>{f.p=v;render()}),sel("w-y","유형 전체",TYPES,f.y,v=>{f.y=v;render()}),
@@ -1140,6 +1140,22 @@ function workBody(){
           el.addEventListener("dragstart",e=>e.dataTransfer.setData("text/task",t.id));return el})),
         id=>{const t=byId(S.data.tasks,id);if(t&&t.s!==st)updTask(id,{s:st},`「${st}」로 바꿨습니다`)});
     }));
+  }else if(f.mode==="git"){
+    // desk: 작업 내역 — PC가 깃 기록에서 옮겨 둔 커밋과 옵시디언 작업 로그의 제목을 날짜별로 본다. 읽기만 한다
+    pfLoad();wlogLoad();
+    const all=((PF.hist&&PF.hist.items)||[]).filter(t=>t.git&&(!f.p||t.p===f.p)&&(!f.y||t.y===f.y)&&(!q||t.t.toLowerCase().includes(q)));
+    const logs=(S.wlog.rows||[]).filter(r=>!f.p&&!f.y&&(!q||r.t.toLowerCase().includes(q)));
+    if(!all.length&&!logs.length)return h("div",{class:"empty"},PF.loading||S.wlog.busy?"작업 내역을 불러오는 중…":PF.err?"작업 내역을 읽지 못했습니다: "+PF.err:"작업 내역이 없습니다. PC에서 tools/sync-git.js를 돌리면 깃 커밋이 여기에 나옵니다"," ",h("button",{class:"btn sm",onclick:()=>{pfLoad(true);wlogLoad(true)}},"다시 읽기"));
+    const byDay={};all.forEach(t=>((byDay[t.d]=byDay[t.d]||{c:[],l:[]}).c.push(t)));logs.forEach(r=>((byDay[r.d]=byDay[r.d]||{c:[],l:[]}).l.push(r)));
+    const days=Object.keys(byDay).sort().reverse(),wk=monOf(today),cnt=(a,b)=>all.filter(t=>t.d>=a&&(!b||t.d<b)).length;
+    const byT={};all.filter(t=>t.d>=addD(today,-30)).forEach(t=>{byT[t.y]=(byT[t.y]||0)+1});const mx=Math.max(1,...Object.values(byT));
+    body=h("div",{class:"grid g-today"},
+      card("작업 내역",{count:days.length+"일 중 최근 30일치",right:h("button",{class:"btn ghost sm","aria-label":"다시 읽기",onclick:()=>{pfLoad(true);wlogLoad(true)}},ic("refresh"))},days.slice(0,30).map(k=>h("div",null,
+        h("div",{class:"sec-t"},rel(k)+" · "+fmtMD(k)+(byDay[k].c.length?" · 커밋 "+byDay[k].c.length+"건":"")),
+        byDay[k].l.map(r=>h("div",{class:"row",style:"gap:8px;padding:4px 0;font-size:13px;flex-wrap:nowrap;align-items:flex-start"},h("span",{class:"tag"},"기록"),h("b",{style:"flex:1;min-width:0;font-weight:600"},r.t))),
+        byDay[k].c.map(t=>h("div",{class:"row",style:"gap:8px;padding:4px 0;font-size:13px;flex-wrap:nowrap;align-items:flex-start"},h("span",{class:"tag"},h("i",{style:`background:${TCOL[t.y]||"var(--gray)"}`}),t.y),h("span",{style:"flex:1;min-width:0"},t.t),h("span",{class:"faint",style:"font-size:12px"},t.p)))))),
+      h("div",{class:"stack"},h("div",{class:"kpis"},kpi("이번 주 커밋",cnt(wk),"건",`지난주 ${cnt(addD(wk,-7),wk)}건`),kpi("최근 30일",cnt(addD(today,-30)),"건","")),
+        card("유형별 커밋",{count:"최근 30일"},h("div",{class:"bars"},Object.entries(byT).sort((a,b)=>b[1]-a[1]).map(([k,v])=>h("div",{class:"hbar"},h("span",null,k),h("span",{class:"tr"},h("i",{style:`width:${v/mx*100}%;background:${TCOL[k]||"var(--gray)"}`})),h("b",null,v)))))));
   }else{
     const done=list.filter(isDone).sort((a,b)=>(b.d||"")<(a.d||"")?-1:1);
     const wkStart=monOf(today),thisW=done.filter(t=>t.d&&dOf(t.d)>=wkStart).length,lastW=done.filter(t=>t.d&&dOf(t.d)>=addD(wkStart,-7)&&dOf(t.d)<wkStart).length;
@@ -1580,10 +1596,10 @@ function pfCopy(t,msg){(navigator.clipboard?navigator.clipboard.writeText(t):Pro
 // 완료 업무 전체(3월~)는 따로 불러와 이 브라우저에 6시간 보관
 function pfLoad(force){
   if(S.demo){if(!PF.hist||!PF.hist.demo){PF.hist=demoHist();PF.replay=true}return}
-  if(PF.loading||(PF.hist&&!PF.hist.demo&&!force&&Date.now()-(PF.hist.at||0)<6*3600e3))return;
+  if(PF.loading||(PF.err&&!force)||(PF.hist&&!PF.hist.demo&&!force&&Date.now()-(PF.hist.at||0)<6*3600e3))return; // desk: 실패한 뒤에는 누를 때만 다시 요청한다
   PF.loading=true;
   api("history",{}).then(r=>{PF.hist={at:Date.now(),items:r};PF.err=null;PF.replay=true;ls.set("desk:hist",PF.hist)})
-    .catch(e=>{PF.err=e.message}).finally(()=>{PF.loading=false;if(/^(pf|acct|letter|job)$/.test(S.view))render()});
+    .catch(e=>{PF.err=e.message}).finally(()=>{PF.loading=false;if(/^(pf|acct|letter|job|work)$/.test(S.view))render()});
 }
 function pfItems(){
   const m=new Map();((PF.hist&&PF.hist.items)||[]).forEach(t=>m.set(t.id,t));
@@ -2028,9 +2044,9 @@ function mailSheet(){
 // 작업 내용은 평소 읽기에 들어 있지 않다. 이 화면을 열 때 받아 와 여기에만 들고, 기기에 저장하지 않는다
 S.wlog={rows:null,busy:false,err:null};
 function wlogLoad(force){
-  const W=S.wlog;if(W.busy||(W.rows&&!force))return;
+  const W=S.wlog;if(W.busy||((W.rows||W.err)&&!force))return; // desk: 실패한 뒤에는 「다시 시도」를 누를 때만 다시 요청한다(다시 그릴 때마다 요청하면 끝없이 돈다)
   W.busy=true;W.err=null;
-  api("worklog",{}).then(r=>{W.rows=r.entries}).catch(e=>{W.err=e.message}).finally(()=>{W.busy=false;if(S.view==="log")render()});
+  api("worklog",{}).then(r=>{W.rows=r.entries}).catch(e=>{W.err=e.message}).finally(()=>{W.busy=false;if(S.view==="log"||S.view==="work")render()});
 }
 function viewLog(){
   wlogLoad();
@@ -2081,7 +2097,7 @@ function render(){
   // desk: 뺀 화면(일상, 도구 등)으로 가는 버튼이 원본 곳곳에 남아 있다. 어디서 오든 남긴 화면으로 돌린다
   if(!VIEWS.some(v=>v[0]===S.view))S.view="today";
   if(S.view!=="att"&&S.pay.open)S.pay={open:false,rows:null,busy:false};
-  if(S.view!=="log"&&S.wlog.rows)S.wlog={rows:null,busy:false,err:null}; // desk: 작업 기록 화면을 떠나면 받아 둔 것을 버린다 // desk: 근태 화면을 떠나면 급여를 다시 가린다
+  if(S.view!=="log"&&S.view!=="work"&&(S.wlog.rows||S.wlog.err))S.wlog={rows:null,busy:false,err:null}; // desk: 작업 기록 화면을 떠나면 받아 둔 것을 버린다 // desk: 근태 화면을 떠나면 급여를 다시 가린다
   $("#app").hidden=false;syncProjects();
   const cnt=navCounts();
   fill($("#nav"),h("h6",null,"desk"),VIEWS.map(([k,n,icn],i)=>h("button",{"aria-current":S.view===k?"page":null,onclick:()=>{S.view=k;ls.set("desk:view",k);S.sel=null;render();$("#scroll").scrollTop=0},title:`${n} (${i+1})`},ic(icn),n,cnt[k]?h("span",{class:"c"},cnt[k]):null)),
