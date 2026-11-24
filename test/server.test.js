@@ -322,12 +322,17 @@ assert.deepStrictEqual([r.data.mime, Buffer.from(r.data.b64, 'base64').toString(
 assert.match(post('workImg', { path: 'entities/게임/저장 수정.md' }).error, /목록에 없는/);       // 노트를 그림으로 읽을 수 없다
 root._files.splice(root._files.indexOf(idx), 1);
 
-// 포트폴리오: PC가 desk 폴더에 써 둔 한 파일짜리 HTML을 읽기만 해서 준다. 비공개라 load에는 넣지 않는다
-assert.match(post('portfolio', {}).error, /포트폴리오 파일이 없습니다/);
+// 지원 서류(이력서, 포트폴리오): PC가 desk 폴더에 써 둔 한 파일짜리 HTML을 읽기만 해서 준다. 비공개라 load에는 넣지 않는다
+assert.match(post('doc', { name: '이력서' }).error, /이력서 파일이 없습니다/);
+const cvFile = root.createFile('이력서.html', '<!doctype html><p>이력서 본문</p>');
 const pfFile = root.createFile('포트폴리오.html', '<!doctype html><p>포트폴리오 본문</p>');
-pfFile.setContent = () => { throw new Error('포트폴리오는 읽기만 한다'); };
-assert.strictEqual(post('portfolio', {}).data.html, '<!doctype html><p>포트폴리오 본문</p>');
-assert.ok(!JSON.stringify(post('load', {}).data).includes('포트폴리오 본문'));
+cvFile.setContent = pfFile.setContent = () => { throw new Error('지원 서류는 읽기만 한다'); };
+assert.strictEqual(post('doc', { name: '이력서' }).data.html, '<!doctype html><p>이력서 본문</p>');
+assert.strictEqual(post('doc', { name: '포트폴리오' }).data.html, '<!doctype html><p>포트폴리오 본문</p>');
+assert.match(post('doc', { name: '급여.md' }).error, /모르는 문서/);            // 정해 둔 두 이름 말고는 읽지 않는다
+assert.match(post('doc', { name: '../이력서' }).error, /모르는 문서/);
+assert.ok(!/이력서 본문|포트폴리오 본문/.test(JSON.stringify(post('load', {}).data)));
+root._files.splice(root._files.indexOf(cvFile), 1);
 root._files.splice(root._files.indexOf(pfFile), 1);
 
 // 일정 추가: 입력을 검사한 뒤 캘린더에 쓴다

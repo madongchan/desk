@@ -1791,18 +1791,22 @@ function goalCard(items){
           h("div",null,h("b",null,p+" "),h("span",{class:"faint"},po.n+"건 · "+Object.entries(po.y).sort((x,y)=>y[1]-x[1]).map(([y,n])=>y+" "+n).join(", "))))))}))
     :h("div",{class:"empty"},"이 기간 완료 업무가 없습니다"));
 }
-// desk: 포트폴리오 문서(portfolio 저장소의 build.js가 desk 폴더에 쓴 한 파일짜리 HTML). 「보기」를 누를 때만 받아 오고 기기에 저장하지 않는다.
-// 문서는 스크립트만 허용한 격리 창(iframe)에 띄우고, 창 높이는 문서가 알려 주는 값으로 맞춘다
-S.pfdoc={html:null,busy:false,h:0};
+// desk: 지원 서류(이력서, 포트폴리오. portfolio 저장소의 build.js가 desk 폴더에 쓴 한 파일짜리 HTML). 누를 때만 받아 오고 기기에 저장하지 않는다.
+// 한 번에 하나만 스크립트만 허용한 격리 창(iframe)에 띄우고, 창 높이는 문서가 알려 주는 값으로 맞춘다
+const PFDOC0=()=>({name:null,html:null,busy:null,h:0});
+S.pfdoc=PFDOC0();
 addEventListener("message",e=>{const f=$("#pfdoc"),n=e.data&&e.data.deskPortfolioHeight;
   if(f&&e.source===f.contentWindow&&typeof n==="number"&&n>0){S.pfdoc.h=Math.min(Math.ceil(n),60000);f.style.height=S.pfdoc.h+"px"}});
 function pfDocCard(){
   const P=S.pfdoc;
-  const show=async()=>{P.busy=true;render();try{P.html=(await api("portfolio",{})).html}catch(e){toast("포트폴리오를 불러오지 못했습니다 · "+e.message,"bad")}P.busy=false;render()};
-  if(!P.html)return card("포트폴리오 문서",{icon:"star",right:h("button",{class:"btn sm",onclick:()=>{if(!P.busy)show()}},P.busy?"불러오는 중…":"보기")},
-    h("div",{class:"empty"},"지원할 때 내는 포트폴리오입니다. 연락처가 들어 있어 「보기」를 누를 때만 서버에서 받아 오고 이 기기에는 저장하지 않습니다."));
-  return card("포트폴리오 문서",{icon:"star",right:h("button",{class:"btn sm",onclick:()=>{S.pfdoc={html:null,busy:false,h:0};render()}},"닫기")},
-    h("iframe",{id:"pfdoc",sandbox:"allow-scripts",srcdoc:P.html,title:"포트폴리오 문서",style:"display:block;width:100%;height:"+(P.h?P.h+"px":"70vh")+";border:0;border-radius:8px"}));
+  const show=async name=>{if(P.busy)return;if(P.name===name){S.pfdoc=PFDOC0();render();return}
+    P.busy=name;render();
+    try{const html=(await api("doc",{name})).html;Object.assign(P,{name,html,h:0})}catch(e){toast(name+"를 불러오지 못했습니다 · "+e.message,"bad")}
+    P.busy=null;render()};
+  const btn=name=>h("button",{class:"btn sm"+(P.name===name?" pri":""),onclick:()=>show(name)},P.busy===name?"불러오는 중…":P.name===name?name+" 닫기":name);
+  return card("지원 서류",{icon:"star",right:h("div",{style:"display:flex;gap:6px"},btn("이력서"),btn("포트폴리오"))},
+    P.html?h("iframe",{id:"pfdoc",sandbox:"allow-scripts",srcdoc:P.html,title:P.name,style:"display:block;width:100%;height:"+(P.h?P.h+"px":"70vh")+";border:0;border-radius:8px"})
+      :h("div",{class:"empty"},"지원할 때 내는 이력서와 포트폴리오입니다. 연락처가 들어 있어 누를 때만 서버에서 받아 오고 이 기기에는 저장하지 않습니다."));
 }
 function viewPf(){
   pfLoad();
@@ -2252,7 +2256,7 @@ function render(){
   // desk: 뺀 화면(일상, 도구 등)으로 가는 버튼이 원본 곳곳에 남아 있다. 어디서 오든 남긴 화면으로 돌린다
   if(!VIEWS.some(v=>v[0]===S.view))S.view="today";
   if(S.view!=="att"&&S.pay.open)S.pay={open:false,rows:null,busy:false};
-  if(S.view!=="pf"&&S.pfdoc.html)S.pfdoc={html:null,busy:false,h:0}; // desk: 포트폴리오 화면을 떠나면 받아 둔 문서를 버린다
+  if(S.view!=="pf"&&S.pfdoc.html)S.pfdoc=PFDOC0(); // desk: 포트폴리오 화면을 떠나면 받아 둔 문서를 버린다
   if(S.view!=="lib"&&(S.lib.idx||S.lib.err))S.lib=libNew(); // desk: 작업 화면을 떠나면 받아 둔 노트와 그림을 버린다
   if(S.view!=="log"&&S.view!=="work"&&(S.wlog.rows||S.wlog.err))S.wlog={rows:null,busy:false,err:null}; // desk: 작업 기록 화면을 떠나면 받아 둔 것을 버린다 // desk: 근태 화면을 떠나면 급여를 다시 가린다
   $("#app").hidden=false;syncProjects();

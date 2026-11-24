@@ -13,10 +13,11 @@
  */
 
 const TZ = 'Asia/Seoul';
-const VERSION = '2026-11-25a';
+const VERSION = '2026-11-25b';
 const WORK_FILE = '작업 목록.json';   // PC의 tools/sync-vault.js가 쓰는 파일. 서버는 읽기만 한다
 const GIT_FILE = '작업 내역.md';   // PC의 tools/sync-git.js가 쓰는 파일. 서버는 읽기만 한다
-const PORTFOLIO_FILE = '포트폴리오.html';   // PC의 portfolio 저장소 build.js가 쓰는 한 파일짜리 문서. 서버는 읽기만 한다
+// 지원 서류: PC의 portfolio 저장소 build.js가 desk 폴더에 쓰는 한 파일짜리 문서들. 서버는 이 이름들만, 읽기만 한다
+const DOC_FILES = { '이력서': '이력서.html', '포트폴리오': '포트폴리오.html' };
 // PC에서 고친 지 이만큼 안 지난 파일에는 읽으면서 번호를 붙여 쓰지 않는다. 옵시디언이 아직 쓰는 중일 수 있다
 const FRESH_MS = 2 * 60 * 1000;
 const TRASH = '휴지통.md';
@@ -363,12 +364,14 @@ const ACTIONS = {
   },
 
   /**
-   * 포트폴리오 문서(그림까지 한 파일에 든 HTML). 연락처와 재직 중인 회사 내용이 있어 load에는 넣지 않는다.
-   * 화면에서 열 때만 받아 가고 기기에 저장하지 않는다.
+   * 지원 서류 한 개(그림까지 한 파일에 든 HTML). 연락처와 재직 중인 회사 내용이 있어 load에는 넣지 않는다.
+   * 화면에서 열 때만 받아 가고 기기에 저장하지 않는다. 정해 둔 이름만 읽는다(다른 파일을 읽는 길이 되지 않게).
    */
-  portfolio: function (a, folder) {
-    const html = readText_(folder, PORTFOLIO_FILE);
-    if (!html) throw new Error('포트폴리오 파일이 없습니다. PC에서 portfolio 저장소의 build.js를 돌려 주세요');
+  doc: function (a, folder) {
+    const name = String(a.name || '');
+    if (!Object.prototype.hasOwnProperty.call(DOC_FILES, name)) throw new Error('모르는 문서입니다: ' + name);
+    const html = readText_(folder, DOC_FILES[name]);
+    if (!html) throw new Error(name + ' 파일이 없습니다. PC에서 portfolio 저장소의 build.js를 돌려 주세요');
     return { html: html };
   },
 
