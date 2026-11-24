@@ -2211,7 +2211,7 @@ function libPump(){
 function setupView(){
   const err=S.setupErr;
   return h("div",{class:"setup"},h("div",{class:"box"},
-    h("h2",null,"desk"),h("p",null,"옵시디언과 구글 캘린더를 실시간으로 읽고 쓰는 대시보드입니다. "+(S.preset?"이 기기에서 처음 한 번만 비밀번호를 넣어 주세요.":"처음 한 번만 연결 주소와 비밀번호를 넣어 주세요.")+" 이 브라우저에만 저장됩니다. 공용 PC에서는 쓰고 나서 빨간 버튼을 두 번 눌러 잠가 주세요."),
+    h("h2",null,"desk"),h("p",null,"옵시디언과 구글 캘린더를 실시간으로 읽고 쓰는 대시보드입니다. "+(S.preset?"이 기기에서 처음 한 번만 비밀번호를 넣어 주세요.":"처음 한 번만 연결 주소와 비밀번호를 넣어 주세요.")+" 이 브라우저에만 저장됩니다. 공용 PC에서는 쓰고 나서 사이드바 아래 자물쇠를 눌러 잠가 주세요."),
     S.preset?null:h("label",{class:"field"},h("label",null,"연결 주소 (Apps Script 웹 앱 URL)"),h("input",{class:"in",id:"su-url",placeholder:"https://script.google.com/macros/s/…/exec",value:S.drafts["su-url"]||"",oninput:e=>S.drafts["su-url"]=e.target.value})),
     h("label",{class:"field"},h("label",null,"비밀번호 (Apps Script의 PASS 값)"),h("input",{class:"in",id:"su-pass",type:"password",autocomplete:"current-password",value:S.drafts["su-pass"]||"",oninput:e=>S.drafts["su-pass"]=e.target.value,onkeydown:e=>{if(e.key==="Enter")connect()}})),
     err?h("div",{class:"err"},err):null,
