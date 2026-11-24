@@ -322,6 +322,14 @@ assert.deepStrictEqual([r.data.mime, Buffer.from(r.data.b64, 'base64').toString(
 assert.match(post('workImg', { path: 'entities/게임/저장 수정.md' }).error, /목록에 없는/);       // 노트를 그림으로 읽을 수 없다
 root._files.splice(root._files.indexOf(idx), 1);
 
+// 포트폴리오: PC가 desk 폴더에 써 둔 한 파일짜리 HTML을 읽기만 해서 준다. 비공개라 load에는 넣지 않는다
+assert.match(post('portfolio', {}).error, /포트폴리오 파일이 없습니다/);
+const pfFile = root.createFile('포트폴리오.html', '<!doctype html><p>포트폴리오 본문</p>');
+pfFile.setContent = () => { throw new Error('포트폴리오는 읽기만 한다'); };
+assert.strictEqual(post('portfolio', {}).data.html, '<!doctype html><p>포트폴리오 본문</p>');
+assert.ok(!JSON.stringify(post('load', {}).data).includes('포트폴리오 본문'));
+root._files.splice(root._files.indexOf(pfFile), 1);
+
 // 일정 추가: 입력을 검사한 뒤 캘린더에 쓴다
 assert.strictEqual(post('eventAdd', { title: '회의', date: '11/25' }).ok, false);
 assert.strictEqual(post('eventAdd', { title: ' ', date: today }).ok, false);

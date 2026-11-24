@@ -13,9 +13,10 @@
  */
 
 const TZ = 'Asia/Seoul';
-const VERSION = '2026-11-24r';
+const VERSION = '2026-11-25a';
 const WORK_FILE = '작업 목록.json';   // PC의 tools/sync-vault.js가 쓰는 파일. 서버는 읽기만 한다
 const GIT_FILE = '작업 내역.md';   // PC의 tools/sync-git.js가 쓰는 파일. 서버는 읽기만 한다
+const PORTFOLIO_FILE = '포트폴리오.html';   // PC의 portfolio 저장소 build.js가 쓰는 한 파일짜리 문서. 서버는 읽기만 한다
 // PC에서 고친 지 이만큼 안 지난 파일에는 읽으면서 번호를 붙여 쓰지 않는다. 옵시디언이 아직 쓰는 중일 수 있다
 const FRESH_MS = 2 * 60 * 1000;
 const TRASH = '휴지통.md';
@@ -359,6 +360,16 @@ const ACTIONS = {
     const bytes = under_(vault_(folder), path).getBlob().getBytes();
     if (bytes.length > 8 * 1024 * 1024) throw new Error('그림이 너무 큽니다(8MB 초과)');
     return { mime: mime, b64: Utilities.base64Encode(bytes) };
+  },
+
+  /**
+   * 포트폴리오 문서(그림까지 한 파일에 든 HTML). 연락처와 재직 중인 회사 내용이 있어 load에는 넣지 않는다.
+   * 화면에서 열 때만 받아 가고 기기에 저장하지 않는다.
+   */
+  portfolio: function (a, folder) {
+    const html = readText_(folder, PORTFOLIO_FILE);
+    if (!html) throw new Error('포트폴리오 파일이 없습니다. PC에서 portfolio 저장소의 build.js를 돌려 주세요');
+    return { html: html };
   },
 
   worklog: function () {
