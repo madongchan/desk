@@ -22,6 +22,12 @@ let r = post('load', {}, 'wrong');
 assert.deepStrictEqual([r.ok, r.auth, g.slept(), root._files.length], [false, true, 2000, 0]);
 assert.strictEqual(JSON.parse(ctx.doPost({ postData: { contents: 'not json' } }).text).ok, false);
 assert.strictEqual(JSON.parse(ctx.doPost({ postData: { contents: 'null' } }).text).ok, false);
+// 서버 비밀번호가 11글자보다 짧으면 맞게 넣어도 받지 않는다
+PROPS.PASS = '0123456789';
+assert.match(post('load', {}, '0123456789').error, /11글자 이상/);
+PROPS.PASS = '0123456789a';
+assert.strictEqual(post('ping', {}, '0123456789a').ok, true);
+PROPS.PASS = PASS;
 
 // 모르는 동작, 객체에 원래 있는 이름
 assert.match(post('nope', {}).error, /알 수 없는 동작/);
