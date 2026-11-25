@@ -1615,7 +1615,7 @@ function gjLoad(force){
 function gjScore(x,P){
   const inf=x.info||{},txt=(x.role+" "+x.duty+" "+(inf["키워드"]||"")).toLowerCase(),why=[];let s=0;
   const hit=(GJ_ENGINE[P.engine]||[]).filter(k=>txt.includes(k));
-  if(hit.length){s+=Math.min(6,hit.length*3);why.push([hit.join("·"),"g"])}
+  if(hit.length){s+=Math.min(6,hit.length*3);why.push([hit.map(k=>({unity:"Unity",unreal:"Unreal","c#":"C#","c++":"C++"})[k]||k).join("·"),"g"])}
   const ar=x.area||inf["근무지역"]||"";
   if(ar&&GJ_AREA[P.area]){if(GJ_AREA[P.area].some(a=>ar.includes(a))){s+=3;why.push([ar.replace(" > "," "),"g"])}else{s-=2;why.push([ar.replace(" > "," ")+" · 지역 밖","b"])}}
   const c=inf["경력"]||"",m=/(\d+)\s*년/.exec(c),my=parseFloat(P.years);
