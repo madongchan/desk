@@ -13,7 +13,7 @@
  */
 
 const TZ = 'Asia/Seoul';
-const VERSION = '2026-11-25f';
+const VERSION = '2026-11-25g';
 const WORK_FILE = '작업 목록.json';   // PC의 tools/sync-vault.js가 쓰는 파일. 서버는 읽기만 한다
 const GIT_FILE = '작업 내역.md';   // PC의 tools/sync-git.js가 쓰는 파일. 서버는 읽기만 한다
 // 지원 서류: PC의 portfolio 저장소 build.js가 desk 폴더에 쓰는 한 파일짜리 문서들. 서버는 이 이름들만, 읽기만 한다
@@ -176,7 +176,9 @@ function one_(text, kind, id) {
 const JOB_URL_RE = /^https?:\/\/(?:www\.)?gamejob\.co\.kr\/Recruit\/GI_Read\/View\?(?:[^#\s]*&)?GI_No=(\d{1,12})(?:[&#][^\s]*)?$/i;
 
 const JOB_VIEW_URL = 'https://www.gamejob.co.kr/Recruit/GI_Read/View?GI_No=';
-const JOB_LIST_URL = 'https://www.gamejob.co.kr/Recruit/joblist?menucode=duty&duty=1';   // 직무: 게임개발(클라이언트)
+const JOB_LIST_URL = 'https://www.gamejob.co.kr/Recruit/joblist?menucode=duty&duty=';
+// 화면에서 고를 수 있는 직무 번호(게임잡의 분류): 1 클라이언트, 2 모바일, 3 게임AI, 12 플랫폼 개발, 16 서버, 18 엔진
+const JOB_DUTIES = [1, 2, 3, 12, 16, 18];
 
 /** 바깥 웹 페이지 한 장을 글로 받는다. */
 function webText_(url) {
@@ -447,12 +449,13 @@ const ACTIONS = {
   },
 
   /**
-   * 게임잡의 게임 클라이언트 직무 목록 한 장을 읽어 공고 요약 목록으로 돌려준다. 저장하지 않는다.
+   * 게임잡에서 고른 직무(기본은 게임 클라이언트)의 목록 한 장을 읽어 공고 요약 목록으로 돌려준다. 저장하지 않는다.
    * 목록에는 회사, 제목, 직무, 근무지, 마감 표시만 있다. 경력·키워드·고용형태 같은 조건은 공고 페이지의 요약 칸에 있어서
    * 공고마다 한 장씩 읽되, 다섯 장씩 끊어 받고 한 번 읽은 것은 6시간 기억한다(사이트에 한꺼번에 몰아 청하지 않는다). 본문과 그림은 읽지 않는다.
    */
-  jobList: function () {
-    const rows = parseJobList(webText_(JOB_LIST_URL));
+  jobList: function (a) {
+    const duty = JOB_DUTIES.indexOf(Number(a.duty)) >= 0 ? Number(a.duty) : 1;
+    const rows = parseJobList(webText_(JOB_LIST_URL + duty));
     if (!rows.length) throw new Error('게임잡 목록을 읽지 못했습니다');
     const cache = CacheService.getScriptCache(), need = [];
     rows.forEach(function (r) {

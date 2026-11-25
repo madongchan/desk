@@ -386,6 +386,10 @@ assert.deepStrictEqual(g.ocr.batches, [5, 2]);                                  
 g.ocr.batches.length = 0;
 post('jobList', {});
 assert.deepStrictEqual(g.ocr.batches, [1]);                                                    // 읽은 것은 기억해 두고, 못 읽은 한 장만 다시 청한다
+// 직무를 골라 읽는다. 정해 둔 직무 번호만 받고, 그 밖의 값은 클라이언트(1)로 본다(주소에 아무 글자나 끼워 넣지 못하게)
+g.web[GJ + '/Recruit/joblist?menucode=duty&duty=16'] = { text: row(201) };
+assert.deepStrictEqual(post('jobList', { duty: 16 }).data.rows.map(x => x.no), ['201']);
+['999', '1&x=1', null, 'duty'].forEach(d => assert.strictEqual(post('jobList', { duty: d }).data.rows.length, 7, String(d)));
 
 // 일정 추가: 입력을 검사한 뒤 캘린더에 쓴다
 assert.strictEqual(post('eventAdd', { title: '회의', date: '11/25' }).ok, false);
