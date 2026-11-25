@@ -153,6 +153,31 @@ assert.deepStrictEqual(cm.map(c => [c.d, c.p, c.y, c.t]), [
 assert.deepStrictEqual([cm[0].id, cm[0].s, cm[0].git], ['git-a1b2c3d', '완료', true]);
 assert.deepStrictEqual(N.parseCommits(''), []);
 
+/* ── 공고 페이지 읽기: 주소 하나에서 받은 글을 지원처 칸으로 바꾼다 ── */
+const PAGE = '<html><head><title>[경력] 게임 클라이언트 프로그래머</title><title>사이트 이름</title>' +
+  '<meta property="og:title" content="[어느게임즈] [경력] 게임 클라이언트 프로그래머">' +
+  '<script>var x = "<dt class=\\"recruit-data-title\\">가짜</dt>";</script></head><body>' +
+  '<dl><dt class="recruit-data-title">경력</dt> <dd class="recruit-data-text">3년 이상</dd></dl>' +
+  '<dl><dt class="recruit-data-title">모집분야</dt>\n<dd class="recruit-data-text">게임개발(클라이언트), <b>게임개발(모바일)</b></dd></dl>' +
+  '<dl><dt class="recruit-data-title">마감일</dt><dd class="recruit-data-text"><p class="end-date">2026.12.05</p></dd></dl>' +
+  '<a id="goArea" href="#">서울 &gt; 서초구</a></body></html>';
+const BODY = '<html><head><title>채용공고 상세페이지</title><style>body{color:red}</style></head><body><h3>담당업무</h3>' +
+  '<p>전투 시스템&nbsp;개발 &amp; 유지보수</p><ul><li>Unity 3년 이상</li><li>C#</li></ul><br><br><br>우대: 서버 경험&#39;</body></html>';
+let jp = N.parseJobPage(PAGE, BODY);
+assert.deepStrictEqual([jp.n, jp.role, jp.d], ['어느게임즈', '[경력] 게임 클라이언트 프로그래머', '2026-12-05']);
+assert.strictEqual(jp.memo, '경력: 3년 이상 · 모집분야: 게임개발(클라이언트), 게임개발(모바일) · 마감일: 2026.12.05 · 근무지역: 서울 > 서초구');
+assert.strictEqual(jp.post, "담당업무\n전투 시스템 개발 & 유지보수\nUnity 3년 이상\nC#\n우대: 서버 경험'");   // 머리말과 꾸밈은 빼고 줄만 남긴다
+jp = N.parseJobPage(PAGE.replace('2026.12.05', '채용시 마감'), '<html><body><img src="a.png"><img src="b.png"></body></html>');
+assert.deepStrictEqual([jp.d, jp.post], [null, '']);                              // 날짜가 아니면 비운다. 그림뿐인 본문에는 글이 없다
+jp = N.parseJobPage('<html><title>제목만 있는 페이지</title></html>', '');
+assert.deepStrictEqual([jp.n, jp.role, jp.memo], ['', '제목만 있는 페이지', '']);
+assert.strictEqual(N.parseJobPage(PAGE, '<p>' + '가'.repeat(30000) + '</p>').post.length, 12000);    // 너무 긴 본문은 자른다
+// 본문에 넣은 그림의 주소를 뽑는다. https만, 겹친 것은 한 번만, 네 장까지
+assert.deepStrictEqual(N.jobImages('<img src="https://a.example/1.jpg" alt="x"><IMG class="k" src=\'//b.example/2.png\'><img src="http://c.example/3.jpg"><img src="https://a.example/1.jpg"><img src="/rel.png">'),
+  ['https://a.example/1.jpg', 'https://b.example/2.png']);
+assert.strictEqual(N.jobImages([1, 2, 3, 4, 5, 6].map(i => '<img src="https://a.example/' + i + '.jpg">').join('')).length, 4);
+assert.deepStrictEqual(N.jobImages(''), []);
+
 /* ── 볼트 목록 만들기(PC 프로그램): 노트 글에서 프로젝트, 시스템, 날짜, 요약, 그림 위치를 뽑는다 ── */
 const { describe } = require('../tools/sync-vault.js');
 const IMGS = { '구조.svg': 'entities/게임/저장/Docs/구조.svg', '화면.png': 'entities/게임/저장/화면.png' };

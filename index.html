@@ -1602,6 +1602,9 @@ function jobsCard(){
         el.addEventListener("dragstart",e=>e.dataTransfer.setData("text/job",j.id));return el})),
     id=>{const j=byId(S.data.jobs,id);if(j&&j.st!==st)mutate(D=>{byId(D.jobs,id).st=st},()=>api("update",{kind:"job",id,fields:{st}}),`「${st}」 단계로 옮겼습니다`)},"text/job");
   return card("지원 현황",{icon:"star",count:`진행 ${js.filter(j=>!["합격","불합격","보류"].includes(j.st)).length}곳`,right:h("span",{class:"faint",style:"font-size:11.5px"},"카드를 끌어 단계 이동")},
+    // desk: 게임잡 공고 주소를 붙여 넣으면 그 한 장을 읽어 지원처로 넣는다(회사, 직무, 마감, 공고 내용. 그림 공고는 그림에서 글자를 읽는다)
+    h("div",{class:"row"},draftIn("j-u",{placeholder:"게임잡 공고 주소 붙여 넣기 (…/Recruit/GI_Read/View?GI_No=…)",class:"in grow","aria-label":"게임잡 공고 주소",onkeydown:e=>{if(e.key==="Enter")jobFromUrl()}}),
+      h("button",{class:"btn pri",id:"j-ub",disabled:S.jobBusy?"disabled":null,onclick:jobFromUrl},S.jobBusy?"읽는 중…":"주소로 가져오기")),
     h("div",{class:"row"},draftIn("j-n",{placeholder:"지원처",class:"in grow","aria-label":"지원처"}),draftIn("j-r",{placeholder:"직무",class:"in grow","aria-label":"직무"}),
       draftIn("j-d",{type:"date","aria-label":"마감일"}),
       h("button",{class:"btn",onclick:()=>{const n=(S.drafts["j-n"]||"").trim();if(!n)return;const f={n,role:S.drafts["j-r"]||"",d:S.drafts["j-d"]||null,st:"관심"};S.drafts["j-n"]=S.drafts["j-r"]=S.drafts["j-d"]="";
@@ -2010,6 +2013,20 @@ function jmLoad(force){
   if(JM.err&&!force)return;
   JM.loading=true;JM.err=null;
   api("jobMail",{q:JM.q}).then(r=>{JM.d=r}).catch(e=>{JM.err=e.message}).finally(()=>{JM.loading=false;if(S.view==="job")render()});
+}
+// desk: 게임잡 공고 주소 한 장을 읽어 지원처로 넣는다. 그림 공고는 글자 읽기 때문에 수십 초가 걸릴 수 있다
+async function jobFromUrl(){
+  const url=(S.drafts["j-u"]||"").trim();if(!url||S.jobBusy)return;
+  S.jobBusy=true;render();
+  try{
+    const r=await api("jobFetch",{url}),f=r.fields,rd=r.read;
+    if((S.data.jobs||[]).some(j=>j.link===f.link)){toast("이미 넣은 공고입니다 · "+(f.n||f.role),"bad");return}
+    const made=await api("add",{kind:"job",fields:f});
+    (S.data.jobs=S.data.jobs||[]).push(made);S.drafts["j-u"]="";
+    const how=rd.images?"그림 "+rd.images+"장에서 글을 읽었습니다":rd.text?"공고 글을 읽었습니다":"공고 내용은 읽지 못했습니다";
+    toast("「"+(f.n||f.role)+"」 추가 · "+how+(rd.failed?" · 그림 "+rd.failed+"장 실패("+(rd.error||"")+")":""),rd.failed&&!rd.images&&!rd.text?"bad":undefined);
+  }catch(e){toast("공고를 가져오지 못했습니다: "+e.message,"bad")}
+  finally{S.jobBusy=false;render()}
 }
 function jmOpen(m){if(!byId(S.data.mail||[],m.id))(S.data.mail=S.data.mail||[]).push(m);openMail(m,"main")}
 function viewJob(){

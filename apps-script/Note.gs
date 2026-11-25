@@ -298,9 +298,60 @@ function parseCommits(text) {
   return out;
 }
 
+/** HTML을 줄 단위 글로 바꾼다. 머리말, 스크립트, 꾸밈은 버리고 문단과 목록은 줄로 나눈다. */
+function htmlText_(html) {
+  return String(html || '')
+    .replace(/<head[\s\S]*?<\/head>|<(script|style)[\s\S]*?<\/\1>|<!--[\s\S]*?-->/gi, '')
+    .replace(/<br\s*\/?>|<\/(p|div|li|tr|h\d|dd|dt|ul|ol|table)>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'")
+    .replace(/&#(\d+);/g, function (m, n) { return String.fromCharCode(+n); }).replace(/&amp;/g, '&')
+    .split('\n').map(function (l) { return l.replace(/\s+/g, ' ').trim(); }).filter(function (l) { return l; }).join('\n');
+}
+
+const JOB_POST_MAX = 12000;
+
+/**
+ * 채용 공고 페이지 한 장을 지원처 칸으로 바꾼다. html은 공고 페이지, bodyHtml은 그 안의 본문 틀이다.
+ * 요약 칸은 「이름표(dt) → 값(dd)」 쌍으로 들어 있어 통째로 읽는다. 마감이 날짜가 아니면(「채용시 마감」) d를 비운다.
+ * 본문을 그림으로만 올린 공고는 여기서 글이 나오지 않는다. 그림은 jobImages로 주소를 뽑아 서버가 따로 읽는다.
+ */
+function parseJobPage(html, bodyHtml) {
+  const page = String(html || '').replace(/<script[\s\S]*?<\/script>/gi, '');
+  const first = function (re) { const m = re.exec(page); return m ? htmlText_(m[1]).replace(/\n/g, ' ') : ''; };
+  const og = /^\[([^\]]+)\]\s*(.*)$/.exec(first(/<meta property="og:title" content="([^"]*)"/i));
+  const pairs = [];
+  const re = /<dt class="recruit-data-title">([\s\S]*?)<\/dt>\s*<dd class="recruit-data-text">([\s\S]*?)<\/dd>/gi;
+  let m;
+  while ((m = re.exec(page))) pairs.push([htmlText_(m[1]).replace(/\n/g, ' '), htmlText_(m[2]).replace(/\n/g, ' ')]);
+  const area = first(/<a id="goArea"[^>]*>([\s\S]*?)<\/a>/i);
+  if (area) pairs.push(['근무지역', area]);
+  const end = (pairs.filter(function (p) { return p[0] === '마감일'; })[0] || [])[1] || '';
+  const date = /(\d{4})[.\-\/]\s*(\d{1,2})[.\-\/]\s*(\d{1,2})/.exec(end);
+  const two = function (s) { return ('0' + s).slice(-2); };
+  const post = htmlText_(bodyHtml);
+  return {
+    n: og ? og[1] : '', role: og ? og[2] : first(/<title>([\s\S]*?)<\/title>/i),
+    d: date ? date[1] + '-' + two(date[2]) + '-' + two(date[3]) : null,
+    memo: pairs.filter(function (p) { return p[0] && p[1]; }).map(function (p) { return p[0] + ': ' + p[1]; }).join(' · ').slice(0, 1000),
+    post: post.slice(0, JOB_POST_MAX),
+  };
+}
+
+/** 본문 틀에 넣은 그림의 주소. 공고를 그림으로 올린 회사가 많다. https만, 겹친 것은 한 번만, 네 장까지. */
+function jobImages(bodyHtml) {
+  const out = [], re = /<img[^>]+src=["']([^"']+)["']/gi;
+  let m;
+  while ((m = re.exec(String(bodyHtml || ''))) && out.length < 4) {
+    const u = m[1].trim().replace(/^\/\//, 'https://');
+    if (/^https:\/\//i.test(u) && out.indexOf(u) < 0) out.push(u);
+  }
+  return out;
+}
+
 if (typeof module !== 'undefined') {
   module.exports = {
     KINDS: KINDS, listRecords: listRecords, ensureIds: ensureIds, addRecord: addRecord,
-    updateRecord: updateRecord, takeRecord: takeRecord, cleanTitle: cleanTitle, parseLog: parseLog, parseCommits: parseCommits,
+    updateRecord: updateRecord, takeRecord: takeRecord, cleanTitle: cleanTitle, parseLog: parseLog, parseCommits: parseCommits, parseJobPage: parseJobPage, jobImages: jobImages,
   };
 }

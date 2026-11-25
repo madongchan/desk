@@ -13,7 +13,7 @@
  */
 
 const TZ = 'Asia/Seoul';
-const VERSION = '2026-11-25b';
+const VERSION = '2026-11-25c';
 const WORK_FILE = '작업 목록.json';   // PC의 tools/sync-vault.js가 쓰는 파일. 서버는 읽기만 한다
 const GIT_FILE = '작업 내역.md';   // PC의 tools/sync-git.js가 쓰는 파일. 서버는 읽기만 한다
 // 지원 서류: PC의 portfolio 저장소 build.js가 desk 폴더에 쓰는 한 파일짜리 문서들. 서버는 이 이름들만, 읽기만 한다
@@ -170,6 +170,36 @@ function rows_(text, kind) {
 
 function one_(text, kind, id) {
   return rows_(text, kind).filter(function (r) { return r.id === id; })[0];
+}
+
+// 게임잡 공고 한 장의 주소. 주소 끝까지 맞아야 하고(다른 사이트 주소에 끼워 넣은 것을 막는다) 번호는 숫자만 받는다
+const JOB_URL_RE = /^https?:\/\/(?:www\.)?gamejob\.co\.kr\/Recruit\/GI_Read\/View\?(?:[^#\s]*&)?GI_No=(\d{1,12})(?:[&#][^\s]*)?$/i;
+
+/** 바깥 웹 페이지 한 장을 글로 받는다. */
+function webText_(url) {
+  const r = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
+  if (r.getResponseCode() !== 200) return '';
+  return r.getContentText('UTF-8');
+}
+
+/**
+ * 그림 한 장에서 글자를 읽는다(OCR). 구글 드라이브에 그림을 올리면서 구글 문서로 바꿔 달라고 하면 글자를 읽어 준다.
+ * 읽으려고 만든 임시 문서는 바로 지운다. 30KB보다 작은 그림(로고, 배너)과 6MB보다 큰 그림은 읽지 않는다.
+ */
+function ocr_(url) {
+  const r = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
+  if (r.getResponseCode() !== 200) throw new Error('그림을 받지 못했습니다');
+  const blob = r.getBlob(), size = blob.getBytes().length;
+  if (!/^image\//i.test(blob.getContentType() || '')) throw new Error('그림 파일이 아닙니다');
+  if (size < 30 * 1024) return '';
+  if (size > 6 * 1024 * 1024) throw new Error('그림이 너무 큽니다(6MB 초과)');
+  const doc = Drive.Files.create({ name: 'desk 공고 글자 읽기(임시)', mimeType: 'application/vnd.google-apps.document' }, blob, { ocrLanguage: 'ko' });
+  try {
+    return DocumentApp.openById(doc.id).getBody().getText().split('\n').map(function (l) { return l.replace(/\s+/g, ' ').trim(); })
+      .filter(function (l) { return l; }).join('\n');
+  } finally {
+    try { Drive.Files.remove(doc.id); } catch (err) { /* 못 지워도 읽은 글은 준다. 드라이브에 임시 문서가 남는다 */ }
+  }
 }
 
 /** PC가 만든 작업 목록을 읽는다. */
@@ -406,6 +436,28 @@ const ACTIONS = {
   jobMail: function (a) {
     const q = String(a.q || '').replace(/\s+/g, ' ').trim().slice(0, 200) || JOB_MAIL_QUERY;
     return GmailApp.search('newer_than:30d ' + q, 0, 40).map(mailRow_);
+  },
+
+  /**
+   * 사용자가 붙여 넣은 게임잡 공고 주소 한 장을 읽어 지원처 칸으로 돌려준다. 저장은 하지 않는다(화면이 받아서 추가한다).
+   * 공고 번호만 뽑아 주소를 서버가 다시 만든다. 사용자가 준 주소를 그대로 읽지 않으므로 다른 곳을 읽어 주는 길이 되지 않는다.
+   * 사이트를 훑지 않는다. 누를 때 그 한 장(공고 페이지, 본문 틀, 본문에 넣은 그림)만 읽는다.
+   */
+  jobFetch: function (a) {
+    const m = JOB_URL_RE.exec(String(a.url || '').trim());
+    if (!m) throw new Error('게임잡 공고 주소만 가져올 수 있습니다(…gamejob.co.kr/Recruit/GI_Read/View?GI_No=번호)');
+    const link = 'https://www.gamejob.co.kr/Recruit/GI_Read/View?GI_No=' + m[1];
+    const body = webText_('https://www.gamejob.co.kr/Recruit/GI_Read_Comt_Ifrm?gno=' + m[1]);
+    const job = parseJobPage(webText_(link), body);
+    if (!job.n && !job.role) throw new Error('공고를 읽지 못했습니다. 마감됐거나 주소가 바뀌었을 수 있습니다');
+    // 공고를 그림으로 올린 회사가 많고 그쪽이 더 정확하다. 그림에서 읽은 글을 앞에 둔다
+    const read = [], errors = [];
+    jobImages(body).forEach(function (u) {
+      try { const t = ocr_(u); if (t) read.push(t); } catch (err) { errors.push(err.message); }
+    });
+    const post = read.length && job.post ? read.join('\n') + '\n\n── 글로 적힌 부분 ──\n' + job.post : read.join('\n') || job.post;
+    return { fields: { n: job.n, role: job.role, d: job.d, link: link, memo: job.memo, post: post.slice(0, JOB_POST_MAX), st: '관심' },
+      read: { text: job.post.length, images: read.length, failed: errors.length, error: errors[0] || null } };
   },
 
   /** 그 해의 총 연차와 특별휴가 일수를 정한다. 그 해 줄이 있으면 고치고 없으면 만든다. */

@@ -89,7 +89,15 @@ function makeContext(root, props, files) {
     return th;
   };
   const threads = [mk('t1', '채용 공고 안내', '"어느 회사" <hr@example.com>', true), mk('t2', '', 'f@example.com', false)];
+  // 가짜 바깥 웹과 가짜 글자 읽기(OCR). web에 주소 → { text } 또는 { bytes, type }을 넣어 두면 그 주소가 답한다
+  const web = {}, ocr = { text: '', made: [], removed: [], fail: false };
   const ctx = vm.createContext({
+    UrlFetchApp: { fetch: url => { const r = web[url];
+      return { getResponseCode: () => (r ? 200 : 404), getContentText: () => (r && r.text) || '',
+        getBlob: () => ({ getBytes: () => (r && r.bytes) || Buffer.from((r && r.text) || ''), getContentType: () => (r && r.type) || 'text/html' }) }; } },
+    Drive: { Files: { create: (meta, blob, opt) => { if (ocr.fail) throw new Error('Request Too Large'); ocr.made.push([meta.mimeType, blob.getBytes().length, opt && opt.ocrLanguage]); return { id: 'ocr-doc-' + ocr.made.length }; },
+      remove: id => { ocr.removed.push(id); } } },
+    DocumentApp: { openById: () => ({ getBody: () => ({ getText: () => ocr.text }) }) },
     GmailApp: {
       search: (q, start, max) => { if (mailBroken) throw new Error('메일 권한이 없습니다'); searches.push(q); return threads.filter(t => !t._archived).slice(0, max); },
       getThreadById: id => threads.find(t => t.getId() === id) || null,
@@ -109,7 +117,7 @@ function makeContext(root, props, files) {
   });
   const src = f => fs.readFileSync(path.join(__dirname, '..', 'apps-script', f), 'utf8');
   vm.runInContext(src('Note.gs') + '\n' + src('Code.gs') + '\nthis.doPost = doPost; this.selfCheck = selfCheck;', ctx);
-  return { ctx, slept: () => slept, created: () => created, breakCalendar: b => { broken = b; }, ownCalendar: b => { owned = b; }, breakMail: b => { mailBroken = b; }, searches: () => searches, lookups: () => lookups, top: top, vault: vault };
+  return { ctx, slept: () => slept, created: () => created, breakCalendar: b => { broken = b; }, ownCalendar: b => { owned = b; }, breakMail: b => { mailBroken = b; }, searches: () => searches, lookups: () => lookups, top: top, vault: vault, web: web, ocr: ocr };
 }
 
 module.exports = { fakeFolder, diskFolder, makeContext };

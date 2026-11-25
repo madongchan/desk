@@ -335,6 +335,36 @@ assert.ok(!/이력서 본문|포트폴리오 본문/.test(JSON.stringify(post('l
 root._files.splice(root._files.indexOf(cvFile), 1);
 root._files.splice(root._files.indexOf(pfFile), 1);
 
+// 공고 주소 하나 가져오기: 게임잡 공고 주소만 받고, 번호만 뽑아 서버가 주소를 다시 만든다(아무 주소나 읽어 주는 길이 되지 않게)
+['https://evil.example/Recruit/GI_Read/View?GI_No=1', 'https://www.gamejob.co.kr.evil.example/Recruit/GI_Read/View?GI_No=1',
+  'https://www.gamejob.co.kr/Login/x?GI_No=1', 'file:///etc/passwd', '', 'https://www.gamejob.co.kr/Recruit/GI_Read/View?GI_No=abc'].forEach(u =>
+  assert.match(post('jobFetch', { url: u }).error, /게임잡 공고 주소만/, u));
+const GJ = 'https://www.gamejob.co.kr';
+g.web[GJ + '/Recruit/GI_Read/View?GI_No=77'] = { text: '<meta property="og:title" content="[어느게임즈] 클라이언트 프로그래머"><dl><dt class="recruit-data-title">마감일</dt><dd class="recruit-data-text">2026.12.05</dd></dl>' };
+g.web[GJ + '/Recruit/GI_Read_Comt_Ifrm?gno=77'] = { text: '<body><p>글로 적은 본문</p></body>' };
+r = post('jobFetch', { url: ' http://gamejob.co.kr/Recruit/GI_Read/View?utm=x&GI_No=77&from=mail ' });   // 꼬리표가 붙은 주소도 번호만 쓴다
+assert.strictEqual(r.ok, true, r.error);
+assert.deepStrictEqual(r.data.fields, { n: '어느게임즈', role: '클라이언트 프로그래머', d: '2026-12-05', link: GJ + '/Recruit/GI_Read/View?GI_No=77',
+  memo: '마감일: 2026.12.05', post: '글로 적은 본문', st: '관심' });
+assert.deepStrictEqual([r.data.read.images, r.data.read.failed, g.ocr.made.length], [0, 0, 0]);
+// 그림으로 올린 공고: 그림에서 읽은 글을 앞에, 글로 적힌 부분을 뒤에 둔다. 작은 그림(로고, 배너)은 읽지 않는다
+const big = Buffer.alloc(50 * 1024);
+g.web[GJ + '/Recruit/GI_Read_Comt_Ifrm?gno=77'] = { text: '<body><img src="https://cdn.example/poster.jpg"><img src="//cdn.example/logo.png"><img src="https://cdn.example/없는그림.jpg"><p>바로 지원하기</p></body>' };
+g.web['https://cdn.example/poster.jpg'] = { bytes: big, type: 'image/jpeg' };
+g.web['https://cdn.example/logo.png'] = { bytes: Buffer.alloc(900), type: 'image/png' };
+g.ocr.text = '담당 업무\n  전투 시스템 개발  \n\n자격 요건\nUnity 3년';
+r = post('jobFetch', { url: GJ + '/Recruit/GI_Read/View?GI_No=77' });
+assert.strictEqual(r.data.fields.post, '담당 업무\n전투 시스템 개발\n자격 요건\nUnity 3년\n\n── 글로 적힌 부분 ──\n바로 지원하기');
+assert.deepStrictEqual([r.data.read.images, r.data.read.failed], [1, 1]);                      // 없는 그림 하나는 실패로 센다
+assert.deepStrictEqual(g.ocr.made, [['application/vnd.google-apps.document', 50 * 1024, 'ko']]);
+assert.deepStrictEqual(g.ocr.removed, ['ocr-doc-1']);                                         // 읽으려고 만든 임시 문서는 지운다
+g.ocr.fail = true;                                                                            // 글자 읽기가 실패해도 기본 정보는 준다
+r = post('jobFetch', { url: GJ + '/Recruit/GI_Read/View?GI_No=77' });
+assert.deepStrictEqual([r.ok, r.data.fields.n, r.data.fields.post, r.data.read.images, r.data.read.failed], [true, '어느게임즈', '바로 지원하기', 0, 2]);
+assert.match(r.data.read.error, /Request Too Large/);
+g.ocr.fail = false;
+assert.match(post('jobFetch', { url: GJ + '/Recruit/GI_Read/View?GI_No=404' }).error, /공고를 읽지 못했습니다/);
+
 // 일정 추가: 입력을 검사한 뒤 캘린더에 쓴다
 assert.strictEqual(post('eventAdd', { title: '회의', date: '11/25' }).ok, false);
 assert.strictEqual(post('eventAdd', { title: ' ', date: today }).ok, false);
