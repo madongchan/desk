@@ -156,11 +156,13 @@ select.in{padding-right:24px}
 .stat.red b{color:var(--red)} .stat.orange b{color:var(--orange)} .stat.blue b{color:#409cff} .stat.green b{color:var(--green)}
 
 /* 빠른 입력 */
-.quick{display:grid;gap:6px;background:var(--card);border:.5px solid var(--line);border-radius:var(--r);padding:8px 10px 8px 8px}
-.quick .bar{display:flex;gap:8px;align-items:center}
+.quick{display:grid;grid-template-columns:minmax(0,1fr);gap:6px;background:var(--card);border:.5px solid var(--line);border-radius:var(--r);padding:8px 10px 8px 8px}
+.quick .bar{display:flex;gap:8px;align-items:center;min-width:0}
+.quick .bar input{min-width:0}
 .quick input{flex:1;min-width:0;border:0;background:transparent;font-size:15px;padding:6px 4px}
 .quick input:focus{outline:0}
 .quick .plus{width:26px;height:26px;border-radius:50%;background:var(--blue);display:grid;place-items:center;color:#fff;flex:none}
+.quick .qd{margin:0 4px 0 42px;width:auto;font-size:13px;line-height:1.6;resize:vertical;min-height:52px}
 .quick .hint{font-size:12px;color:var(--fg3);padding:0 4px 2px 42px;display:flex;gap:10px;flex-wrap:wrap;min-height:18px}
 .quick .hint b{color:var(--fg2);font-weight:500}
 
@@ -192,6 +194,7 @@ select.in{padding-right:24px}
 @keyframes pop{40%{transform:scale(1.25)}}
 .task .body{min-width:0;display:grid;gap:2px;cursor:pointer}
 .task .tt{font-size:13.5px;overflow-wrap:anywhere}
+.task .dt{display:block;max-width:100%;font-size:12px;color:var(--fg3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .task.done .tt{color:var(--fg3);text-decoration:line-through}
 .task .meta{display:flex;gap:8px;flex-wrap:wrap;font-size:11.5px;color:var(--fg3)}
 .task .meta .late{color:#ff6961}
@@ -713,7 +716,7 @@ tr.cur td{background:rgba(10,132,255,.1)}
 .banner{background:rgba(255,159,10,.14);border:.5px solid rgba(255,159,10,.35);color:#ffc266;border-radius:10px;padding:8px 12px;font-size:12.5px;display:flex;gap:10px;align-items:center}
 
 /* 빠른 입력 창·원인 확인 */
-.qmodal{width:min(680px,100%);display:grid;gap:6px}
+.qmodal{width:min(680px,100%);min-width:0;display:grid;gap:6px;grid-template-columns:minmax(0,1fr)}
 .qmodal .quick{background:rgba(44,44,46,.95);backdrop-filter:blur(40px);-webkit-backdrop-filter:blur(40px);border:.5px solid rgba(255,255,255,.16);box-shadow:0 30px 80px rgba(0,0,0,.6)}
 .diag{width:min(560px,100%);background:rgba(44,44,46,.95);border:.5px solid rgba(255,255,255,.16);border-radius:14px;padding:18px;display:grid;gap:12px;box-shadow:0 30px 80px rgba(0,0,0,.6)}
 .diag h3{margin:0;font-size:16px}
@@ -976,6 +979,7 @@ function taskRow(t,o={}){
     ck,
     h("div",{class:"body",onclick:()=>openSheet("tasks",t.id),role:"button",tabindex:"0",onkeydown:e=>{if(e.key==="Enter")openSheet("tasks",t.id)}},
       h("span",{class:"tt"},o.strip?t.t.replace(/^\[결정\]\s*/,""):t.t),
+      t.detail?h("span",{class:"dt"},t.detail.split("\n")[0]):null, // desk: 세부 내역이 있으면 첫 줄을 보여 준다
       h("div",{class:"meta"},
         o.noDate||!t.d?null:h("span",{class:late?"late":dd===today?"today":""},rel(t.d)),
         o.noProj?null:ptag(t.p), t.y&&o.type?h("span",null,t.y):null, t.star?h("span",null,"⭐"):null)),
@@ -1066,11 +1070,15 @@ function evRow(e,now){
 function quickAdd(){
   const id="q-main",v=S.drafts[id]||"";
   const modes=[["task","할 일"],["memo","메모"],["event","일정"]];
-  const inp=h("input",{id,value:v,autocomplete:"off","aria-label":"빠르게 추가",placeholder:S.qmode==="task"?"새 할 일 — N":S.qmode==="memo"?"메모 — 떠오른 것을 그냥 적으세요":"새 일정",
+  const inp=h("input",{id,value:v,autocomplete:"off","aria-label":"빠르게 추가",placeholder:S.qmode==="task"?"할 일 제목 — N":S.qmode==="memo"?"메모 — 떠오른 것을 그냥 적으세요":"새 일정",
     oninput:e=>{S.drafts[id]=e.target.value;const hn=$("#q-hint");if(hn)fill(hn,...qHint(e.target.value))},
-    onkeydown:e=>{if(e.key==="Enter"&&!e.isComposing){e.preventDefault();submitQuick()}else if(e.key==="Tab"&&!e.shiftKey&&!e.target.value){e.preventDefault();S.qmode=modes[(modes.findIndex(m=>m[0]===S.qmode)+1)%3][0];render()}}});
+    onkeydown:e=>{if(e.key==="Enter"&&!e.isComposing){e.preventDefault();submitQuick()}else if(e.key==="Tab"&&!e.shiftKey&&!e.target.value){e.preventDefault();S.qmode=modes[(modes.findIndex(m=>m[0]===S.qmode)+1)%3][0];render()}
+      else if(e.key==="Tab"&&!e.shiftKey&&S.qmode==="task"){const d=$("#q-detail");if(d){e.preventDefault();d.focus()}}}}); // desk: 제목을 적고 Tab을 누르면 세부 내역으로
   return h("div",{class:"quick"},h("div",{class:"bar"},h("span",{class:"plus"},ic("plus")),inp,
     h("div",{class:"seg",role:"group","aria-label":"입력 종류"},modes.map(([k,n])=>h("button",{"aria-pressed":String(S.qmode===k),onclick:()=>{S.qmode=k;render();$("#"+id)&&$("#"+id).focus()}},n)))),
+    // desk: 할 일은 제목 아래에 세부 내역을 여러 줄로 적을 수 있다. 비워 둬도 된다
+    S.qmode==="task"?h("textarea",{class:"in qd",id:"q-detail",rows:"2","aria-label":"세부 내역",placeholder:"세부 내역 (선택) · 여러 줄로 적을 수 있습니다 · "+KEY.trim()+"+Enter로 저장",value:S.drafts["q-detail"]||"",
+      oninput:e=>{S.drafts["q-detail"]=e.target.value},onkeydown:e=>{if(e.key==="Enter"&&(e.ctrlKey||e.metaKey)&&!e.isComposing){e.preventDefault();submitQuick()}}}):null,
     h("div",{class:"hint",id:"q-hint"},qHint(v)));
 }
 // 입력하는 동안 힌트 줄만 바꿈(한글 조합이 끊기지 않게 입력칸은 그대로 둠)
@@ -1093,7 +1101,8 @@ async function submitQuick(){
     const tmp={id:"tmp-ev"+Date.now(),t:P.t,all:!P.time,s:P.time?new Date(`${P.day}T${P.time}:00`).toISOString():P.day,e:P.time?new Date(`${P.day}T${end}:00`).toISOString():P.day,cal:"내 캘린더"};
     mutate(D=>{(D.events=D.events||[]).push(tmp)},()=>api("eventAdd",{title:P.t,date:P.day,start:P.time,end}),"캘린더에 추가했습니다");return;
   }
-  addTask({t:P.t,d:P.d,r:P.r,p:P.p});
+  const detail=(S.drafts["q-detail"]||"").trim();S.drafts["q-detail"]="";
+  addTask(Object.assign({t:P.t,d:P.d,r:P.r,p:P.p},detail?{detail}:{}));
 }
 
 /* 이번 주 */
@@ -1247,6 +1256,8 @@ function sheetView(){
     h("div",{class:"bd"},
       h("div",{class:"row",style:"align-items:flex-start;flex-wrap:nowrap"},h("button",{class:"ck"+(isDone(t)?" on":""),html:CHECK,style:"margin-top:4px","aria-label":"완료",onclick:e=>toggleTask(t,e.currentTarget)}),
         h("textarea",{class:"title",id:"sh-title",rows:"2",value:t.t,onchange:e=>{const v=e.target.value.trim();if(v&&v!==t.t)updTask(t.id,{t:v},"제목을 바꿨습니다")}})),
+      // desk: 원본은 세부 업무를 보여 주기만 했다(노션에서 적었다). 여기서 바로 적고 고친다
+      h("div",{class:"field"},h("label",null,"세부 내역"),h("textarea",{class:"in",id:"sh-detail",rows:"5",value:t.detail||"",placeholder:"무엇을, 어디까지 할지 적습니다. 비워 둬도 됩니다",style:"line-height:1.6;resize:vertical",onchange:e=>updTask(t.id,{detail:e.target.value},"저장했습니다")})),
       h("div",{class:"seg",role:"group","aria-label":"상태",style:"justify-self:start"},STATUS.map(s=>h("button",{"aria-pressed":String(t.s===s),onclick:()=>updTask(t.id,{s})},s))),
       h("div",{class:"field"},h("label",null,"날짜"+(t.d?" · "+rel(t.d):"")),h("div",{class:"chips"},
         [["오늘",today],["내일",addD(today,1)],["다음 주 월",addD(monOf(today),7)]].map(([n,d])=>h("button",{class:"chip","aria-pressed":String(dd===d),onclick:()=>setDate(d,tm)},n)),
@@ -1258,7 +1269,6 @@ function sheetView(){
       chips("핵심업무",GOALS,t.k,v=>updTask(t.id,{k:v}),GCOL),
       h("div",{class:"field"},h("label",null,"포트폴리오"),h("div",null,h("button",{class:"chip","aria-pressed":String(!!t.star),onclick:()=>updTask(t.id,{star:!t.star})},t.star?"⭐ 들어 있음":"☆ 넣기"))),
       h("div",{class:"field"},h("label",null,"성과·산출물"),h("textarea",{class:"in",id:"sh-out",rows:"3",value:t.out||"",placeholder:"예) 점검 12건 통과",onchange:e=>updTask(t.id,{out:e.target.value},"저장했습니다")})),
-      t.detail?h("div",{class:"field"},h("label",null,"세부 업무"),h("div",{class:"note"},t.detail)):null,
       h("div",{class:"field"},h("label",null,"비고"),h("textarea",{class:"in",id:"sh-note",rows:"2",value:t.note||"",onchange:e=>updTask(t.id,{note:e.target.value},"저장했습니다")}))),
     h("footer",null,h("span",{class:"faint",style:"font-size:11.5px;flex:1;align-self:center"},"바꾸면 옵시디언에 바로 저장됩니다"),
       h("button",{class:"btn bad",onclick:e=>{const b=e.currentTarget;if(b.dataset.arm){trash("tasks",t.id,"tasks");S.sel=null}else{b.dataset.arm="1";b.textContent="한 번 더 누르면 삭제";setTimeout(()=>{if(b.isConnected){delete b.dataset.arm;b.textContent="휴지통으로"}},3000)}}},"휴지통으로")));
