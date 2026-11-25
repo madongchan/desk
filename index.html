@@ -1176,7 +1176,7 @@ function workBody(){
     const days=Object.keys(byDay).sort().reverse(),wk=monOf(today),cnt=(a,b)=>all.filter(t=>t.d>=a&&(!b||t.d<b)).length;
     const byT={};all.filter(t=>t.d>=addD(today,-30)).forEach(t=>{byT[t.y]=(byT[t.y]||0)+1});const mx=Math.max(1,...Object.values(byT));
     body=h("div",{class:"grid g-today"},
-      card("작업 내역",{count:(PF.loading?"새로 받는 중… · ":"")+"받은 지 "+agoTxt(PF.hist.at)+" · "+days.length+"일 중 최근 30일치",right:h("button",{class:"btn ghost sm","aria-label":"다시 읽기",title:"PC가 15분마다 깃 기록을 옮깁니다",onclick:()=>pfLoad(true)},ic("refresh"))},days.slice(0,30).map(k=>h("div",null,
+      card("작업 내역",{count:(PF.loading?"새로 받는 중… · ":"")+"받은 지 "+agoTxt(new Date(PF.hist.at).toISOString())+" · "+days.length+"일 중 최근 30일치",right:h("button",{class:"btn ghost sm","aria-label":"다시 읽기",title:"PC가 15분마다 깃 기록을 옮깁니다",onclick:()=>pfLoad(true)},ic("refresh"))},days.slice(0,30).map(k=>h("div",null,
         h("div",{class:"sec-t"},rel(k)+" · "+fmtMD(k)+" · 커밋 "+byDay[k].c.length+"건"),
         byDay[k].c.map(t=>h("div",{class:"row",style:"gap:8px;padding:4px 0;font-size:13px;flex-wrap:nowrap;align-items:flex-start"},h("span",{class:"tag"},h("i",{style:`background:${TCOL[t.y]||"var(--gray)"}`}),t.y),h("span",{style:"flex:1;min-width:0"},t.t),h("span",{class:"faint",style:"font-size:12px"},t.p)))))),
       h("div",{class:"stack"},h("div",{class:"kpis"},kpi("이번 주 커밋",cnt(wk),"건",`지난주 ${cnt(addD(wk,-7),wk)}건`),kpi("최근 30일",cnt(addD(today,-30)),"건","")),
