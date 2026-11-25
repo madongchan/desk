@@ -40,7 +40,9 @@ http.createServer((req, res) => {
   if (!/^[\w.-]+$/.test(name) || name.startsWith('.') || !TYPES[path.extname(name)]) { res.writeHead(404); res.end(); return; }
   fs.readFile(path.join(ROOT, name), (err, data) => {
     if (err) { res.writeHead(404); res.end(); return; }
-    res.writeHead(200, { 'Content-Type': TYPES[path.extname(name)], 'Cache-Control': 'no-store' });
+    // 꼬리표(ETag)는 파일 내용으로 만든다. 화면이 새 버전을 알아채는지 볼 때 쓴다
+    const etag = '"' + require('node:crypto').createHash('md5').update(data).digest('hex') + '"';
+    res.writeHead(200, { 'Content-Type': TYPES[path.extname(name)], 'Cache-Control': 'no-store', ETag: etag });
     res.end(data);
   });
 }).listen(PORT, '127.0.0.1', () => console.log('http://localhost:' + PORT + '  노트 폴더: ' + notes));

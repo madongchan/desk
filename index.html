@@ -111,8 +111,8 @@ select.in{padding-right:24px}
 .muted{color:var(--fg2)} .faint{color:var(--fg3)}
 .tag{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;color:var(--fg2);white-space:nowrap}
 .tag i{width:7px;height:7px;border-radius:50%}
-/* 남은 일: 프로젝트 점이 네온처럼 깜박 */
-.task:not(.done) .meta .tag i{opacity:1;filter:none;animation:neon 2.4s ease-in-out infinite}
+/* 남은 일: 프로젝트 점 */
+.task:not(.done) .meta .tag i{opacity:1;filter:none} /* desk: 네온 깜박임을 뺐다(형광처럼 보여 읽기 어려웠다) */
 @keyframes neon{0%,100%{box-shadow:0 0 0 1px color-mix(in srgb,var(--c) 70%,transparent),0 0 6px 2px var(--c),0 0 14px 4px color-mix(in srgb,var(--c) 45%,transparent)}50%{box-shadow:0 0 0 1px color-mix(in srgb,var(--c) 70%,transparent),0 0 2px 0 color-mix(in srgb,var(--c) 40%,transparent),0 0 0 0 transparent}}
 .pill{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;padding:2px 7px;border-radius:20px;background:var(--fill);color:var(--fg2);white-space:nowrap}
 .pill.red{background:rgba(255,69,58,.18);color:#ff6961}
@@ -212,6 +212,16 @@ select.in{padding-right:24px}
 .ev .tt{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ev .loc{font-size:11.5px;color:var(--fg3)}
 .ev.now .tm{color:var(--red)}
+/* desk: 오늘 목록은 업무와 개인 일정을 섞고 종류별 색 막대로 가른다 */
+.ev .bar[class*="k-"]{background:var(--kc,var(--blue))}
+.task.kbar{box-shadow:inset 3px 0 0 var(--kc)}
+.kleg{display:flex;gap:10px;font-size:11.5px;color:var(--fg3);font-weight:400}
+.kleg i{display:inline-block;width:8px;height:8px;border-radius:2px;background:var(--kc);margin-right:4px}
+@media (hover:none){.task .act{opacity:1}}
+.quick .picks{display:flex;gap:6px 16px;flex-wrap:wrap;align-items:center;padding:0 4px 0 42px}
+.quick .picks .grp{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.quick .picks label{font-size:11.5px;color:var(--fg3);font-weight:600}
+.quick .picks input{flex:none;font-size:12.5px;padding:3px 10px;border-radius:20px;background:var(--fill);border:0;color:var(--fg);color-scheme:dark}
 
 /* 이번 주 */
 .week{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px}
@@ -227,7 +237,8 @@ select.in{padding-right:24px}
 .wk-ev{font-size:11.5px;padding:3px 6px;border-radius:5px;background:rgba(10,132,255,.2);color:#cfe5ff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .wk-ev b{font-weight:600;font-family:var(--num);margin-right:4px}
 /* 달력 종류별 색: 진한 덩어리 대신 왼쪽 띠+옅은 바탕+글자색 */
-.k-team{--kc:#30d158}.k-work{--kc:#0a84ff}.k-me{--kc:#bf5af2}.k-sh{--kc:#30d158}.k-hol{--kc:#ff6961}.k-task{--kc:#ffd60a}
+/* desk: 종류별 색은 채도를 낮춘 한 벌로 맞춘다(업무 모래색, 내 일정 연보라, 같이 보는 일정 회초록) */
+.k-team{--kc:#86a891}.k-work{--kc:#7f9dbd}.k-me{--kc:#9d92c4}.k-sh{--kc:#86a891}.k-hol{--kc:#c98a8a}.k-task{--kc:#c4ad7a}
 .wk-ev[class*=" k-"],.mi.ev[class*=" k-"],.daypop .dr.ev[class*=" k-"]{background:color-mix(in srgb,var(--kc) 16%,transparent);color:color-mix(in srgb,var(--kc) 55%,#fff);box-shadow:inset 2px 0 0 var(--kc)}
 .mi.t.k-task,.wk-t.k-task,.daypop .dr.t.k-task{box-shadow:inset 2px 0 0 color-mix(in srgb,var(--kc) 70%,transparent)}
 .mi.t.k-task.done,.wk-t.k-task.done,.daypop .dr.t.k-task.done{box-shadow:none}
@@ -528,7 +539,7 @@ tr.cur td{background:rgba(10,132,255,.1)}
 .chips{display:flex;gap:6px;flex-wrap:wrap}
 .chip{border:0;background:var(--fill);border-radius:20px;padding:4px 11px;font-size:12.5px}
 .chip:hover{background:var(--fill-2)}
-.chip[aria-pressed="true"]{background:var(--blue);color:#fff}
+.chip[aria-pressed="true"]{background:#5b7a99;color:#fff}
 .note{font-size:13px;white-space:pre-wrap;background:rgba(0,0,0,.2);border-radius:8px;padding:8px 10px;color:var(--fg2)}
 .sheet footer{padding:12px 14px;border-top:.5px solid var(--line);display:flex;gap:8px;flex-wrap:wrap}
 
@@ -706,6 +717,7 @@ tr.cur td{background:rgba(10,132,255,.1)}
   border-radius:20px;padding:8px 16px;font-size:13px;box-shadow:0 10px 30px rgba(0,0,0,.5);display:flex;gap:10px;align-items:center;max-width:calc(100vw - 32px)}
 .toast.bad{background:rgba(120,30,28,.95)}
 .toast button{border:0;background:transparent;color:#409cff;font-weight:600}
+.toast.upd{white-space:nowrap}
 
 /* 연결 화면 */
 .setup{position:fixed;inset:0;display:grid;place-items:center;padding:16px;z-index:60}
@@ -754,6 +766,7 @@ tr.cur td{background:rgba(10,132,255,.1)}
   .side-foot{border:0;padding:0}
   .music{position:fixed;right:max(10px,env(safe-area-inset-right));bottom:calc(64px + env(safe-area-inset-bottom));width:220px;z-index:21;background:rgba(44,44,46,.92);backdrop-filter:blur(30px);-webkit-backdrop-filter:blur(30px)}
   .music.mclosed{display:none}
+  .toast{bottom:calc(72px + env(safe-area-inset-bottom))}
   .tabbar{display:flex;overflow-x:auto;padding:6px max(8px,env(safe-area-inset-left)) calc(6px + env(safe-area-inset-bottom)) max(8px,env(safe-area-inset-right));gap:2px}
   .tabbar button{flex:1;min-width:58px;border:0;background:transparent;display:grid;justify-items:center;gap:2px;font-size:10.5px;color:var(--fg2);padding:4px 2px;border-radius:8px}
   .tabbar button svg.i{width:20px;height:20px}
@@ -975,7 +988,7 @@ const ptag=p=>p?h("span",{class:"tag"},h("i",{style:`--c:${PCOL[p]||"var(--gray)
 function taskRow(t,o={}){
   const today=TODAY(),dd=dOf(t.d),late=!isDone(t)&&dd&&dd<today;
   const ck=h("button",{class:"ck"+(isDone(t)?" on":""),html:CHECK,"aria-label":isDone(t)?"완료 취소":"완료로 표시",onclick:e=>{e.stopPropagation();toggleTask(t,e.currentTarget)}});
-  const row=h("div",{class:"task"+(isDone(t)?" done":"")+(S.sel&&S.sel.id===t.id?" sel":""),draggable:o.drag===false?null:"true","data-id":t.id},
+  const row=h("div",{class:"task"+(isDone(t)?" done":"")+(S.sel&&S.sel.id===t.id?" sel":"")+(o.bar?" kbar k-task":""),draggable:o.drag===false?null:"true","data-id":t.id},
     ck,
     h("div",{class:"body",onclick:()=>openSheet("tasks",t.id),role:"button",tabindex:"0",onkeydown:e=>{if(e.key==="Enter")openSheet("tasks",t.id)}},
       h("span",{class:"tt"},o.strip?t.t.replace(/^\[결정\]\s*/,""):t.t),
@@ -984,7 +997,10 @@ function taskRow(t,o={}){
         o.noDate||!t.d?null:h("span",{class:late?"late":dd===today?"today":""},rel(t.d)),
         o.noProj?null:ptag(t.p), t.y&&o.type?h("span",null,t.y):null, t.star?h("span",null,"⭐"):null)),
     h("div",{class:"side-a"},prioEl(t.r),
-      late&&o.quickToday!==false?h("button",{class:"btn ghost sm act",onclick:e=>{e.stopPropagation();updTask(t.id,{d:today},"오늘로 옮겼습니다")}},"오늘로"):null));
+      late&&o.quickToday!==false?h("button",{class:"btn ghost sm act",onclick:e=>{e.stopPropagation();updTask(t.id,{d:today},"오늘로 옮겼습니다")}},"오늘로"):null,
+      // desk: 대시보드 줄 끝에서 바로 내일로 미루고 지운다. 지우기는 두 번 눌러야 옵시디언 휴지통으로 간다
+      o.acts&&!isDone(t)?h("button",{class:"btn ghost sm act",onclick:e=>{e.stopPropagation();const tm=tOf(t.d),d=addD(today,1);updTask(t.id,{d:tm?`${d}T${tm}:00+09:00`:d},"내일로 옮겼습니다")}},"내일로"):null,
+      o.acts?h("button",{class:"btn ghost sm act",style:"color:#c98a7e",onclick:e=>{e.stopPropagation();const b=e.currentTarget;if(b.dataset.arm){trash("tasks",t.id,"tasks")}else{b.dataset.arm="1";b.textContent="한 번 더";setTimeout(()=>{if(b.isConnected){delete b.dataset.arm;b.textContent="지우기"}},3000)}}},"지우기"):null));
   row.addEventListener("dragstart",e=>{e.dataTransfer.setData("text/task",t.id);e.dataTransfer.effectAllowed="move";row.classList.add("dragging")});
   row.addEventListener("dragend",()=>row.classList.remove("dragging"));
   return row;
@@ -1018,18 +1034,15 @@ function tasksOn(day){return S.data.tasks.filter(t=>dOf(t.d)===day)}
 function viewToday(){
   const D=S.data,today=TODAY(),now=new Date();
   const open=D.tasks.filter(t=>!isDone(t));
-  const overdue=open.filter(t=>t.d&&dOf(t.d)<today&&!isDec(t)).sort((a,b)=>a.d<b.d?-1:1);
-  const todays=tasksOn(today).filter(t=>!isDec(t)).sort((a,b)=>(isDone(a)-isDone(b))||((tOf(a.d)||"99")<(tOf(b.d)||"99")?-1:1));
-  const decs=open.filter(isDec);
+  const overdue=open.filter(t=>t.d&&dOf(t.d)<today).sort((a,b)=>a.d<b.d?-1:1);
+  const todays=tasksOn(today).sort((a,b)=>(isDone(a)-isDone(b))||((tOf(a.d)||"99")<(tOf(b.d)||"99")?-1:1));
   const evs=calEvs(today); // desk: 꺼 둔 종류는 대시보드에서도 뺀다
-  const wk=open.filter(t=>t.d&&dOf(t.d)>today&&dOf(t.d)<=addD(today,7)).length;
   const doneToday=todays.filter(isDone).length;
 
+  // desk: 숫자 칸은 오늘 업무와 밀린 일 두 개만 둔다
   const sum=h("div",{class:"sum"},
     stat("오늘 업무",todays.length-doneToday,"blue",()=>jump("sec-today")),
-    stat("밀린 일",overdue.length,overdue.length?"red":"",()=>jump("sec-over")),
-    stat("결정 대기",decs.length,decs.length?"orange":"",()=>jump("card-dec")),
-    stat("7일 안",wk,"",()=>{S.view="work";render()}));
+    stat("밀린 일",overdue.length,overdue.length?"red":"",()=>jump("sec-over")));
   const hero=h("div",{class:"hero"},h("div",null,h("div",{class:"faint",style:"font-size:13px;font-weight:600"},`${now.getFullYear()}년 · ${greet(now)}`),
     h("h2",null,`${now.getMonth()+1}월 ${now.getDate()}일 ${WD[now.getDay()]}요일`)),h("span",{class:"clock",id:"clock"},`${pad(now.getHours())}:${pad(now.getMinutes())}`),wxBox(),sum);
 
@@ -1039,20 +1052,19 @@ function viewToday(){
     return h("button",{class:"dday "+(n===0?"d0":n<=3?"d3":"dn"),onclick:()=>openSheet("tasks",t.id),title:t.t},h("b",null,n===0?"D-DAY":"D-"+n),h("span",null,t.t))})):null;
 
   // 오늘 카드
+  const mix=[...evs.map(e=>[e.all?"":tOf(e.s),evRow(e,now)]),...todays.map(t=>[isDone(t)?"~~":tOf(t.d)||"~",taskRow(t,{noDate:!tOf(t.d),acts:true,bar:true})])].sort((a,b)=>a[0]<b[0]?-1:a[0]>b[0]?1:0);
   const left=card("오늘",{icon:"today",count:`${doneToday}/${todays.length} 완료`,right:ring(todays.length?doneToday/todays.length:0,22,"var(--green)",3.5)},
     overdue.length?h("div",{id:"sec-over"},h("div",{class:"sec-t red"},`밀린 일 ${overdue.length}`,h("span",{class:"sp"}),
       h("button",{class:"btn ghost sm",onclick:()=>moveAllToday(overdue)},"모두 오늘로")),h("div",{class:"list"},overdue.map(t=>taskRow(t)))):null,
-    h("div",null,h("div",{class:"sec-t"},`개인 일정 ${evs.length}`,h("span",{class:"sp"}),D.calError?h("span",{class:"faint"},"캘린더 연결 확인 필요"):null),
-      evs.length?h("div",null,evs.map(e=>evRow(e,now))):h("div",{class:"empty"},"오늘은 캘린더 일정이 없습니다")),
-    h("div",{id:"sec-today"},h("div",{class:"sec-t"},`업무 ${todays.length}`),
-      todays.length?h("div",{class:"list"},todays.map(t=>taskRow(t,{noDate:!tOf(t.d)}))):h("div",{class:"empty"},"오늘 날짜로 잡힌 업무가 없습니다. 위 입력칸에 적으면 바로 추가됩니다")));
+    // desk: 개인 일정과 업무를 시간순으로 한 목록에 섞는다. 종일 일정이 먼저, 시간 없는 업무와 끝낸 업무는 뒤로
+    h("div",{id:"sec-today"},h("div",{class:"sec-t"},`일정과 업무 ${mix.length}`,h("span",{class:"sp"}),D.calError?h("span",{class:"faint"},"캘린더 연결 확인 필요"):null,
+        h("span",{class:"kleg"},CALK.slice(0,3).map(([k,n])=>h("span",{class:"k-"+k},h("i"),n.replace("개인 일정(캘린더) · ",""))))),
+      mix.length?h("div",{class:"list"},mix.map(x=>x[1])):h("div",{class:"empty"},"오늘은 일정과 업무가 없습니다. 위 입력칸에 적으면 바로 추가됩니다")));
 
-  const dec=card("결정 대기",{id:"card-dec",cls:decs.length?"attn":"",count:decs.length+"건",
-      right:h("span",{class:"faint",style:"font-size:11.5px"},"체크하면 결정 완료")},
-    decs.length?h("div",{class:"list"},decs.sort((a,b)=>({"상":0,"중":1,"하":2}[a.r]??3)-({"상":0,"중":1,"하":2}[b.r]??3)).map(t=>taskRow(t,{strip:true,quickToday:false}))):h("div",{class:"empty"},"지금 결정할 일이 없습니다"));
 
   // desk: 스캔, 브리핑 카드와 문장 카드는 뺐다
-  const right=h("div",{class:"stack"},dec,mailCard("main"),habitsCard(true),memoCard(5));
+  // desk: 결정 대기 카드와 메일을 대시보드에서 뺐다. 메일은 일상 화면에 있다
+  const right=h("div",{class:"stack"},habitsCard(true),memoCard(5));
   return [hero,h("div",{class:"quick-row"},quickAdd()),ddays,h("div",{class:"grid g-today"},left,right),weekCard(),monthCard(),projectsCard()];
 }
 const greet=d=>{const H=d.getHours();return H<11?"좋은 아침입니다":H<14?"점심 맛있게 드세요":H<18?"오후도 힘내세요":"오늘도 수고 많으셨습니다"};
@@ -1062,7 +1074,7 @@ function moveAllToday(list){const today=TODAY(),ids=list.map(t=>t.id);
   mutate(D=>D.tasks.forEach(t=>{if(ids.includes(t.id))t.d=today}),()=>Promise.all(ids.map(id=>api("update",{kind:"tasks",id,fields:{d:today}}))),`${ids.length}건을 오늘로 옮겼습니다`)}
 function evRow(e,now){
   const st=e.all?"종일":tOf(e.s),isNow=!e.all&&now>=new Date(e.s)&&now<=new Date(e.e);
-  return h("div",{class:"ev"+(isNow?" now":"")},h("span",{class:"tm"},isNow?"지금":st),h("span",{class:"bar",style:`background:${e.color||"var(--blue)"}`}),
+  return h("div",{class:"ev"+(isNow?" now":"")},h("span",{class:"tm"},isNow?"지금":st),h("span",{class:"bar k-"+e.k}),
     h("div",{style:"min-width:0"},h("div",{class:"tt"},e.t),h("div",{class:"loc"},[e.all?null:`${tOf(e.s)}–${tOf(e.e)}`,e.loc,e.cal].filter(Boolean).join(" · "))));
 }
 
@@ -1071,7 +1083,7 @@ function quickAdd(){
   const id="q-main",v=S.drafts[id]||"";
   const modes=[["task","업무"],["memo","메모"],["event","개인 일정(캘린더)"]];
   const inp=h("input",{id,value:v,autocomplete:"off","aria-label":"빠르게 추가",placeholder:S.qmode==="task"?"업무 제목 — N":S.qmode==="memo"?"메모 — 떠오른 것을 그냥 적으세요":"개인 일정 — 가족과 같이 보는 구글 캘린더에 들어갑니다",
-    oninput:e=>{S.drafts[id]=e.target.value;const hn=$("#q-hint");if(hn)fill(hn,...qHint(e.target.value))},
+    oninput:e=>{S.drafts[id]=e.target.value;const hn=$("#q-hint");if(hn)fill(hn,...qHint(e.target.value));const pk=$("#q-picks");if(pk)pk.replaceWith(quickPicks())},
     onkeydown:e=>{if(e.key==="Enter"&&!e.isComposing){e.preventDefault();submitQuick()}else if(e.key==="Tab"&&!e.shiftKey&&!e.target.value){e.preventDefault();S.qmode=modes[(modes.findIndex(m=>m[0]===S.qmode)+1)%3][0];render()}
       else if(e.key==="Tab"&&!e.shiftKey&&S.qmode==="task"){const d=$("#q-detail");if(d){e.preventDefault();d.focus()}}}}); // desk: 제목을 적고 Tab을 누르면 세부 내역으로
   return h("div",{class:"quick"},h("div",{class:"bar"},h("span",{class:"plus"},ic("plus")),inp,
@@ -1079,17 +1091,35 @@ function quickAdd(){
     // desk: 할 일은 제목 아래에 세부 내역을 여러 줄로 적을 수 있다. 비워 둬도 된다
     S.qmode==="task"?h("textarea",{class:"in qd",id:"q-detail",rows:"2","aria-label":"세부 내역",placeholder:"세부 내역 (선택) · 여러 줄로 적을 수 있습니다 · "+KEY.trim()+"+Enter로 저장",value:S.drafts["q-detail"]||"",
       oninput:e=>{S.drafts["q-detail"]=e.target.value},onkeydown:e=>{if(e.key==="Enter"&&(e.ctrlKey||e.metaKey)&&!e.isComposing){e.preventDefault();submitQuick()}}}):null,
+    S.qmode==="memo"?null:quickPicks(),
     h("div",{class:"hint",id:"q-hint"},qHint(v)));
 }
 // desk: 대시보드에서 날짜 없이 적은 할 일은 오늘로 넣는다. 다른 화면은 날짜 없음 그대로
 const quickDefaultDay=()=>S.view==="today"?TODAY():null;
+// desk: 날짜, 시간, 우선순위, 프로젝트는 눌러서 고른다. 고른 값이 글에 적은 값보다 먼저다("" = 고른 것이 「없음」)
+S.qpick={};
+function quickPick(P){const q=S.qpick,pick=(k,v)=>q[k]!==undefined?(q[k]||null):v;
+  return {day:pick("day",P.day||quickDefaultDay()),time:pick("time",P.time),r:pick("r",P.r),p:pick("p",P.p)}}
+function quickPicks(){
+  const E=quickPick(parseQuick(S.drafts["q-main"]||"")),today=TODAY(),tmr=addD(today,1),task=S.qmode==="task";
+  const set=(k,v)=>{S.qpick[k]=v;render();const i=$("#q-main");i&&i.focus()};
+  const chip=(label,on,fn)=>h("button",{class:"chip","aria-pressed":String(!!on),onclick:fn},label);
+  const grp=(label,...kids)=>h("div",{class:"grp"},h("label",null,label),...kids);
+  return h("div",{class:"picks",id:"q-picks"},
+    grp("날짜",chip("오늘",E.day===today,()=>set("day",today)),chip("내일",E.day===tmr,()=>set("day",tmr)),
+      h("input",{type:"date","aria-label":"날짜 고르기",value:E.day&&E.day!==today&&E.day!==tmr?E.day:"",onchange:e=>set("day",e.target.value)}),
+      task?chip("없음",!E.day,()=>set("day","")):null),
+    grp("시간",chip("없음",!E.time,()=>set("time","")),h("input",{type:"time","aria-label":"시간 고르기",value:E.time||"",onchange:e=>set("time",e.target.value)})),
+    task?grp("우선순위",...["상","중","하"].map(r=>chip(r,E.r===r,()=>set("r",E.r===r?"":r)))):null,
+    task?grp("프로젝트",...PROJECTS.map(p=>chip(p,E.p===p,()=>set("p",E.p===p?"":p)))):null);
+}
 // 입력하는 동안 힌트 줄만 바꿈(한글 조합이 끊기지 않게 입력칸은 그대로 둠)
 function qHint(v){
   if(!v)return [S.qmode==="task"?"예) 내일 3시 빌드 올리기 !상 #업무  ·  금요일 주간 정리  ·  11/4 데모 마감":S.qmode==="memo"?"떠오른 생각을 적어 두면 메모에 쌓이고, 나중에 업무로 바꿀 수 있습니다":"예) 다음주 화요일 오후 2시 회의 → 구글 캘린더에 추가"];
   if(S.qmode==="memo")return [h("span",null,"Enter로 메모 저장")];
-  const P=parseQuick(v);
-  return [h("span",null,"📅 ",h("b",null,P.d?rel(P.d):S.qmode==="event"?"날짜 필요":quickDefaultDay()?rel(quickDefaultDay()):"날짜 없음")),
-    P.r?h("span",null,"우선순위 ",h("b",null,P.r)):null,P.p?h("span",null,"# ",h("b",null,P.p)):null,
+  const E=quickPick(parseQuick(v));
+  return [h("span",null,"📅 ",h("b",null,E.day?rel(E.time?`${E.day}T${E.time}:00+09:00`:E.day):S.qmode==="event"?"날짜 필요":"날짜 없음")),
+    E.r?h("span",null,"우선순위 ",h("b",null,E.r)):null,E.p?h("span",null,"# ",h("b",null,E.p)):null,
     h("span",null,"Enter로 ",S.qmode==="event"?"캘린더에 추가":"추가")].filter(Boolean);
 }
 async function submitQuick(){
@@ -1097,14 +1127,15 @@ async function submitQuick(){
   S.drafts[id]="";S.quick=false;
   if(S.qmode==="memo"){addMemo(v);return}
   const P=parseQuick(v);if(!P.t){toast("내용을 적어 주세요","bad");return}
+  const E=quickPick(P);Object.assign(P,{day:E.day,time:E.time,r:E.r,p:E.p,d:E.day?(E.time?`${E.day}T${E.time}:00+09:00`:E.day):null});
   if(S.qmode==="event"){
     if(!P.day){S.drafts[id]=v;toast("개인 일정은 날짜가 필요합니다. 예) 내일 3시 미팅","bad");render();return}
     const end=P.time?`${pad((+P.time.slice(0,2)+1)%24)}:${P.time.slice(3)}`:null;
     const tmp={id:"tmp-ev"+Date.now(),t:P.t,all:!P.time,s:P.time?new Date(`${P.day}T${P.time}:00`).toISOString():P.day,e:P.time?new Date(`${P.day}T${end}:00`).toISOString():P.day,cal:"내 캘린더"};
-    mutate(D=>{(D.events=D.events||[]).push(tmp)},()=>api("eventAdd",{title:P.t,date:P.day,start:P.time,end}),"캘린더에 추가했습니다");return;
+    S.qpick={};mutate(D=>{(D.events=D.events||[]).push(tmp)},()=>api("eventAdd",{title:P.t,date:P.day,start:P.time,end}),"캘린더에 추가했습니다");return;
   }
   const detail=(S.drafts["q-detail"]||"").trim();S.drafts["q-detail"]="";
-  addTask(Object.assign({t:P.t,d:P.d||quickDefaultDay(),r:P.r,p:P.p},detail?{detail}:{}));
+  S.qpick={};addTask(Object.assign({t:P.t,d:P.d,r:P.r,p:P.p},detail?{detail}:{}));
 }
 
 /* 이번 주 */
@@ -2395,6 +2426,16 @@ setInterval(()=>{if(!document.hidden&&!S.sel)refresh(true)},5*60e3);
 // 직원 상태만 1분마다 가볍게 다시 읽음(바뀌었을 때만 오른쪽 패널을 다시 그림)
 // desk: 직원 패널이 없어 1분마다 읽던 것을 뺐다
 document.addEventListener("visibilitychange",()=>{if(!document.hidden&&S.data&&!S.demo&&Date.now()-Date.parse(S.data.at||0)>60e3)refresh(true)});
+// desk: 푸시한 새 버전을 알아채 알림을 띄운다. 이 화면이 받은 사본의 꼬리표(ETag)와 서버의 지금 꼬리표를 견준다
+const pageUrl=location.href.split("#")[0];let pageTag;
+async function checkNewPage(){try{
+  const tag=async c=>{const r=await fetch(pageUrl,{method:c==="force-cache"?"GET":"HEAD",cache:c});return r.ok?r.headers.get("etag"):null};
+  if(pageTag===undefined)pageTag=await tag("force-cache");
+  const now=await tag("no-store");
+  if(pageTag&&now&&now!==pageTag&&!document.querySelector(".toast.upd"))document.body.append(h("div",{class:"toast upd",role:"status"},"새 버전이 올라왔습니다",h("button",{onclick:()=>location.reload()},"새로고침")))
+}catch(e){}}
+checkNewPage();setInterval(()=>{if(!document.hidden)checkNewPage()},5*60e3);
+document.addEventListener("visibilitychange",()=>{if(!document.hidden)checkNewPage()});
 let lastDay=TODAY();setInterval(()=>{if(TODAY()!==lastDay){lastDay=TODAY();render()}},60e3);
 
 /* ═════════ 예시 데이터 ═════════ */
