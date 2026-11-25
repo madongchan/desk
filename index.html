@@ -1656,7 +1656,7 @@ function gjCard(){
             x.sc.why.map(([t,k])=>h("span",{class:"tag",style:"margin-right:8px"},h("i",{style:"background:"+col[k]}),t)),
             [x.end?"마감 "+x.end:null,x.saved?"담음":null].filter(Boolean).join(" · "))),
         op?h("div",{style:"padding:2px 4px 12px"},
-          h("div",{class:"md"},h("div",{class:"mdt"},h("table",null,INFO.filter(k=>inf[k]).map(k=>h("tr",null,h("th",{style:"white-space:nowrap"},k),h("td",null,inf[k])))))),
+          h("div",{class:"md"},h("div",{class:"mdt"},h("table",{style:"width:100%;table-layout:fixed"},INFO.filter(k=>inf[k]).map(k=>h("tr",null,h("th",{style:"width:78px"},k),h("td",null,inf[k])))))),
           h("div",{class:"row",style:"margin:8px 0"},
             bd?null:h("button",{class:"btn",disabled:G.busyNo?"disabled":null,onclick:()=>gjRead(x)},G.busyNo===x.no?"읽는 중… (그림 공고는 10초쯤)":"공고 내용 읽기"),
             x.saved?h("span",{class:"faint",style:"font-size:12px"},"지원 현황에 담았습니다"):h("button",{class:"btn pri",disabled:G.busyNo?"disabled":null,onclick:()=>gjSave(x)},"지원 현황에 담기"),

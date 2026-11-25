@@ -323,7 +323,7 @@ function parseJobPage(html, bodyHtml) {
   const pairs = [];
   const re = /<dt class="recruit-data-title">([\s\S]*?)<\/dt>\s*<dd class="recruit-data-text">([\s\S]*?)<\/dd>/gi;
   let m;
-  while ((m = re.exec(page))) pairs.push([htmlText_(m[1]).replace(/\n/g, ' '), htmlText_(m[2]).replace(/\n/g, ' ')]);
+  while ((m = re.exec(page))) pairs.push([htmlText_(m[1]).replace(/\n/g, ' '), htmlText_(m[2]).replace(/\n/g, ' ').replace(/\s*연봉검색$/, '')]);   // 급여 칸에 딸려 오는 단추 글자를 뗀다
   const area = first(/<a id="goArea"[^>]*>([\s\S]*?)<\/a>/i);
   if (area) pairs.push(['근무지역', area]);
   const end = (pairs.filter(function (p) { return p[0] === '마감일'; })[0] || [])[1] || '';
