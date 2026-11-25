@@ -237,6 +237,16 @@ assert.deepStrictEqual(r.data.docs.map(d => [d.t, d.job]), [['이력서', [jid]]
 assert.deepStrictEqual(post('trash', { kind: 'job', id: jid }).data, { id: jid });
 assert.deepStrictEqual(post('load', {}).data.jobs, []);
 
+// 카테고리: 처음엔 빈 목록. 만들고 즐겨찾기를 켜고 끄면 카테고리.md에 그 줄만 적힌다
+assert.deepStrictEqual(post('load', {}).data.cats, []);
+r = post('add', { kind: 'cat', fields: { n: '공부', fav: true } });
+assert.deepStrictEqual([r.data.n, r.data.fav], ['공부', true]);
+assert.match(text('카테고리.md'), /^- \[ \] 공부 \^[a-z0-9]{6}\n {4}즐겨찾기:: true\n$/);
+post('update', { kind: 'cat', id: r.data.id, fields: { fav: false } });
+assert.deepStrictEqual(post('load', {}).data.cats.map(c => [c.n, c.fav]), [['공부', null]]);
+assert.ok(!text('카테고리.md').includes('즐겨찾기'));
+assert.match(post('add', { kind: 'cat', fields: { n: '이상한', color: 'x' } }).error, /알 수 없는 항목/);
+
 // 지메일: 받은편지함 목록은 읽기에 딸려 오고, 본문과 처리와 공고 검색은 따로 요청한다
 r = post('load', {});
 assert.deepStrictEqual(r.data.mail.map(m => [m.id, m.subj, m.from, m.unread, m.n]), [['t1', '채용 공고 안내', '어느 회사', true, 1], ['t2', '(제목 없음)', 'f@example.com', false, 1]]);

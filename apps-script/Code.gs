@@ -13,7 +13,7 @@
  */
 
 const TZ = 'Asia/Seoul';
-const VERSION = '2026-11-25g';
+const VERSION = '2026-11-25h';
 const WORK_FILE = '작업 목록.json';   // PC의 tools/sync-vault.js가 쓰는 파일. 서버는 읽기만 한다
 const GIT_FILE = '작업 내역.md';   // PC의 tools/sync-git.js가 쓰는 파일. 서버는 읽기만 한다
 // 지원 서류: PC의 portfolio 저장소 build.js가 desk 폴더에 쓰는 한 파일짜리 문서들. 서버는 이 이름들만, 읽기만 한다
@@ -290,7 +290,7 @@ const ACTIONS = {
     const since = addDays_(today, -60);
     const texts = withLock_(function () {
       const t = {};
-      ['tasks', 'memo', 'habit', 'att', 'leave', 'job', 'doc'].forEach(function (k) { t[k] = open_(folder, k); });
+      ['tasks', 'memo', 'habit', 'att', 'leave', 'job', 'doc', 'cat'].forEach(function (k) { t[k] = open_(folder, k); });
       return t;
     });
     const work = attendance_(rows_(texts.att, 'att'), rows_(texts.leave, 'leave'), today);
@@ -307,7 +307,7 @@ const ACTIONS = {
       // 화면이 목록으로 기대하는 칸들. 이 서버는 다루지 않아 비워 둔다
       habits: rows_(texts.habit, 'habit'),
       att: work.att, months: work.months, leave: work.leave,
-      jobs: rows_(texts.job, 'job'), docs: rows_(texts.doc, 'doc'),
+      jobs: rows_(texts.job, 'job'), docs: rows_(texts.doc, 'doc'), cats: rows_(texts.cat, 'cat'),
       news: [], logs: [], sorries: [], scans: [],
     };
     // 캘린더나 메일을 못 읽어도 할 일은 보여야 한다
