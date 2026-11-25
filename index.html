@@ -924,11 +924,14 @@ const typing=()=>{const a=document.activeElement;return a&&/^(INPUT|TEXTAREA|SEL
 // 입력을 마치면 미뤄 둔 새 데이터를 반영
 document.addEventListener("focusout",()=>setTimeout(()=>{if(S.pending&&!typing()){S.pending=false;render()}},300));
 // 화면 먼저 바꾸고 옵시디언에 저장, 실패하면 되돌림
+let saving=0; // desk: 서버에 보내는 중인 저장 수. 0이 아니면 자동 새로고침을 미룬다
 async function mutate(apply,call,okMsg){
   const snap=JSON.stringify(S.data);
   apply(S.data);persist();render();
+  saving++;
   try{const res=await call();persist();render();if(okMsg)toast(okMsg);return res}
   catch(e){S.data=JSON.parse(snap);persist();render();toast("옵시디언 저장 실패 · "+e.message,"bad")}
+  finally{saving--}
 }
 const persist=()=>{if(!S.demo&&S.data)ls.set("desk:cache",S.data)};
 const byId=(arr,id)=>arr.find(x=>x.id===id);
@@ -2426,13 +2429,17 @@ setInterval(()=>{if(!document.hidden&&!S.sel)refresh(true)},5*60e3);
 // 직원 상태만 1분마다 가볍게 다시 읽음(바뀌었을 때만 오른쪽 패널을 다시 그림)
 // desk: 직원 패널이 없어 1분마다 읽던 것을 뺐다
 document.addEventListener("visibilitychange",()=>{if(!document.hidden&&S.data&&!S.demo&&Date.now()-Date.parse(S.data.at||0)>60e3)refresh(true)});
-// desk: 푸시한 새 버전을 알아채 알림을 띄운다. 이 화면이 받은 사본의 꼬리표(ETag)와 서버의 지금 꼬리표를 견준다
+// desk: 푸시한 새 버전을 알아채면 저절로 새로고침한다. 이 화면이 받은 사본의 꼬리표(ETag)와 서버의 지금 꼬리표를 견준다
+// 쓰던 것이 날아가지 않게, 입력 중, 적다 만 글, 열린 창, 타이머, 저장 중이면 알림만 띄우고 다음 확인 때 다시 본다
+const reloadSafe=()=>!saving&&!S.sel&&!S.quick&&!S.palette&&!S.diag&&!TM.run&&!typing()&&!Object.values(S.drafts||{}).some(v=>v&&String(v).trim());
 const pageUrl=location.href.split("#")[0];let pageTag;
 async function checkNewPage(){try{
   const tag=async c=>{const r=await fetch(pageUrl,{method:c==="force-cache"?"GET":"HEAD",cache:c});return r.ok?r.headers.get("etag"):null};
   if(pageTag===undefined)pageTag=await tag("force-cache");
   const now=await tag("no-store");
-  if(pageTag&&now&&now!==pageTag&&!document.querySelector(".toast.upd"))document.body.append(h("div",{class:"toast upd",role:"status"},"새 버전이 올라왔습니다",h("button",{onclick:()=>location.reload()},"새로고침")))
+  if(!pageTag||!now||now===pageTag)return;
+  if(reloadSafe()){location.reload();return}
+  if(!document.querySelector(".toast.upd"))document.body.append(h("div",{class:"toast upd",role:"status"},"새 버전이 올라왔습니다",h("button",{onclick:()=>location.reload()},"새로고침")))
 }catch(e){}}
 checkNewPage();setInterval(()=>{if(!document.hidden)checkNewPage()},5*60e3);
 document.addEventListener("visibilitychange",()=>{if(!document.hidden)checkNewPage()});
