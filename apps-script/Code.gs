@@ -13,7 +13,7 @@
  */
 
 const TZ = 'Asia/Seoul';
-const VERSION = '2026-11-25c';
+const VERSION = '2026-11-25d';
 const WORK_FILE = '작업 목록.json';   // PC의 tools/sync-vault.js가 쓰는 파일. 서버는 읽기만 한다
 const GIT_FILE = '작업 내역.md';   // PC의 tools/sync-git.js가 쓰는 파일. 서버는 읽기만 한다
 // 지원 서류: PC의 portfolio 저장소 build.js가 desk 폴더에 쓰는 한 파일짜리 문서들. 서버는 이 이름들만, 읽기만 한다
@@ -189,9 +189,14 @@ function webText_(url) {
 function ocr_(url) {
   const r = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
   if (r.getResponseCode() !== 200) throw new Error('그림을 받지 못했습니다');
-  const blob = r.getBlob(), size = blob.getBytes().length;
-  if (!/^image\//i.test(blob.getContentType() || '')) throw new Error('그림 파일이 아닙니다');
+  const blob = r.getBlob(), bytes = blob.getBytes(), size = bytes.length;
   if (size < 30 * 1024) return '';
+  // 서버가 붙인 표시(Content-Type)는 믿지 않는다. 그림인데 표시 없이 보내는 곳도, 반대인 곳도 있다. 파일 앞머리로 가린다
+  const b = function (i) { return bytes[i] & 0xFF; };
+  const type = b(0) === 0xFF && b(1) === 0xD8 ? 'image/jpeg' : b(0) === 0x89 && b(1) === 0x50 ? 'image/png'
+    : b(0) === 0x47 && b(1) === 0x49 ? 'image/gif' : null;
+  if (!type) throw new Error('그림 파일이 아닙니다');
+  blob.setContentType(type);
   if (size > 6 * 1024 * 1024) throw new Error('그림이 너무 큽니다(6MB 초과)');
   const doc = Drive.Files.create({ name: 'desk 공고 글자 읽기(임시)', mimeType: 'application/vnd.google-apps.document' }, blob, { ocrLanguage: 'ko' });
   try {

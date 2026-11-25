@@ -90,12 +90,13 @@ function makeContext(root, props, files) {
   };
   const threads = [mk('t1', '채용 공고 안내', '"어느 회사" <hr@example.com>', true), mk('t2', '', 'f@example.com', false)];
   // 가짜 바깥 웹과 가짜 글자 읽기(OCR). web에 주소 → { text } 또는 { bytes, type }을 넣어 두면 그 주소가 답한다
-  const web = {}, ocr = { text: '', made: [], removed: [], fail: false };
+  const web = {}, ocr = { text: '', made: [], types: [], removed: [], fail: false };
   const ctx = vm.createContext({
     UrlFetchApp: { fetch: url => { const r = web[url];
       return { getResponseCode: () => (r ? 200 : 404), getContentText: () => (r && r.text) || '',
-        getBlob: () => ({ getBytes: () => (r && r.bytes) || Buffer.from((r && r.text) || ''), getContentType: () => (r && r.type) || 'text/html' }) }; } },
-    Drive: { Files: { create: (meta, blob, opt) => { if (ocr.fail) throw new Error('Request Too Large'); ocr.made.push([meta.mimeType, blob.getBytes().length, opt && opt.ocrLanguage]); return { id: 'ocr-doc-' + ocr.made.length }; },
+        getBlob: () => { let type = (r && r.type) || 'text/html';
+          return { getBytes: () => (r && r.bytes) || Buffer.from((r && r.text) || ''), getContentType: () => type, setContentType(t) { type = t; return this; } }; } }; } },
+    Drive: { Files: { create: (meta, blob, opt) => { if (ocr.fail) throw new Error('Request Too Large'); ocr.types.push(blob.getContentType()); ocr.made.push([meta.mimeType, blob.getBytes().length, opt && opt.ocrLanguage]); return { id: 'ocr-doc-' + ocr.made.length }; },
       remove: id => { ocr.removed.push(id); } } },
     DocumentApp: { openById: () => ({ getBody: () => ({ getText: () => ocr.text }) }) },
     GmailApp: {

@@ -348,15 +348,20 @@ assert.deepStrictEqual(r.data.fields, { n: '어느게임즈', role: '클라이�
   memo: '마감일: 2026.12.05', post: '글로 적은 본문', st: '관심' });
 assert.deepStrictEqual([r.data.read.images, r.data.read.failed, g.ocr.made.length], [0, 0, 0]);
 // 그림으로 올린 공고: 그림에서 읽은 글을 앞에, 글로 적힌 부분을 뒤에 둔다. 작은 그림(로고, 배너)은 읽지 않는다
-const big = Buffer.alloc(50 * 1024);
+const big = Buffer.alloc(50 * 1024); big[0] = 0xFF; big[1] = 0xD8;   // JPEG 앞머리
 g.web[GJ + '/Recruit/GI_Read_Comt_Ifrm?gno=77'] = { text: '<body><img src="https://cdn.example/poster.jpg"><img src="//cdn.example/logo.png"><img src="https://cdn.example/없는그림.jpg"><p>바로 지원하기</p></body>' };
-g.web['https://cdn.example/poster.jpg'] = { bytes: big, type: 'image/jpeg' };
+g.web['https://cdn.example/poster.jpg'] = { bytes: big, type: 'binary/octet-stream' };   // 그림이라고 표시하지 않고 보내는 서버가 있다. 앞머리로 가린다
 g.web['https://cdn.example/logo.png'] = { bytes: Buffer.alloc(900), type: 'image/png' };
 g.ocr.text = '담당 업무\n  전투 시스템 개발  \n\n자격 요건\nUnity 3년';
 r = post('jobFetch', { url: GJ + '/Recruit/GI_Read/View?GI_No=77' });
 assert.strictEqual(r.data.fields.post, '담당 업무\n전투 시스템 개발\n자격 요건\nUnity 3년\n\n── 글로 적힌 부분 ──\n바로 지원하기');
 assert.deepStrictEqual([r.data.read.images, r.data.read.failed], [1, 1]);                      // 없는 그림 하나는 실패로 센다
 assert.deepStrictEqual(g.ocr.made, [['application/vnd.google-apps.document', 50 * 1024, 'ko']]);
+assert.deepStrictEqual(g.ocr.types, ['image/jpeg']);                                          // 드라이브에는 그림이라고 표시해서 올린다
+g.web['https://cdn.example/notimage.jpg'] = { bytes: Buffer.alloc(50 * 1024), type: 'image/jpeg' };   // 표시는 그림인데 내용이 그림이 아니면 읽지 않는다
+g.web[GJ + '/Recruit/GI_Read_Comt_Ifrm?gno=78'] = { text: '<body><img src="https://cdn.example/notimage.jpg"></body>' };
+g.web[GJ + '/Recruit/GI_Read/View?GI_No=78'] = g.web[GJ + '/Recruit/GI_Read/View?GI_No=77'];
+assert.match(post('jobFetch', { url: GJ + '/Recruit/GI_Read/View?GI_No=78' }).data.read.error, /그림 파일이 아닙니다/);
 assert.deepStrictEqual(g.ocr.removed, ['ocr-doc-1']);                                         // 읽으려고 만든 임시 문서는 지운다
 g.ocr.fail = true;                                                                            // 글자 읽기가 실패해도 기본 정보는 준다
 r = post('jobFetch', { url: GJ + '/Recruit/GI_Read/View?GI_No=77' });
