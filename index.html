@@ -203,7 +203,7 @@ select.in{padding-right:24px}
 .task .side-a{display:flex;gap:4px;align-items:center}
 .prio{font:800 12px var(--num);color:var(--orange);letter-spacing:-.05em}
 .prio.p3{color:var(--red)}
-.task .act{opacity:0;transition:opacity .15s}
+.task .act{opacity:1} /* desk: 줄 끝 단추는 늘 보인다(마우스를 올려야 보이면 있는 줄 몰랐다) */
 .task:hover .act,.task:focus-within .act{opacity:1}
 
 /* 일정 */
@@ -218,7 +218,6 @@ select.in{padding-right:24px}
 .task.kbar{box-shadow:inset 3px 0 0 var(--kc)}
 .kleg{display:flex;gap:10px;font-size:11.5px;color:var(--fg3);font-weight:400}
 .kleg i{display:inline-block;width:8px;height:8px;border-radius:2px;background:var(--kc);margin-right:4px}
-@media (hover:none){.task .act{opacity:1}}
 .quick .picks{display:flex;gap:6px 16px;flex-wrap:wrap;align-items:center;padding:0 4px 0 42px}
 .quick .picks .grp{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
 .quick .picks label{font-size:11.5px;color:var(--fg3);font-weight:600}
@@ -1004,7 +1003,7 @@ const ptag=p=>p?h("span",{class:"tag"},h("i",{style:`--c:${PCOL[p]||"var(--gray)
 function taskRow(t,o={}){
   const today=TODAY(),dd=dOf(t.d),late=!isDone(t)&&dd&&dd<today;
   const ck=h("button",{class:"ck"+(isDone(t)?" on":""),html:CHECK,"aria-label":isDone(t)?"완료 취소":"완료로 표시",onclick:e=>{e.stopPropagation();toggleTask(t,e.currentTarget)}});
-  const row=h("div",{class:"task"+(isDone(t)?" done":"")+(S.sel&&S.sel.id===t.id?" sel":"")+(o.bar?" kbar k-task":""),draggable:o.drag===false?null:"true","data-id":t.id},
+  const row=h("div",{class:"task"+(isDone(t)?" done":"")+(S.sel&&S.sel.id===t.id?" sel":"")+(o.bar===false?"":" kbar k-task"),draggable:o.drag===false?null:"true","data-id":t.id},
     ck,
     h("div",{class:"body",onclick:()=>openSheet("tasks",t.id),role:"button",tabindex:"0",onkeydown:e=>{if(e.key==="Enter")openSheet("tasks",t.id)}},
       h("span",{class:"tt"},o.strip?t.t.replace(/^\[결정\]\s*/,""):t.t),
@@ -1014,9 +1013,9 @@ function taskRow(t,o={}){
         o.noProj?null:ptag(t.p), t.y&&o.type?h("span",null,t.y):null, t.star?h("span",null,"⭐"):null)),
     h("div",{class:"side-a"},prioEl(t.r),
       late&&o.quickToday!==false?h("button",{class:"btn ghost sm act",onclick:e=>{e.stopPropagation();updTask(t.id,{d:today},"오늘로 옮겼습니다")}},"오늘로"):null,
-      // desk: 대시보드 줄 끝에서 바로 내일로 미루고 지운다. 지우기는 두 번 눌러야 옵시디언 휴지통으로 간다
-      o.acts&&!isDone(t)?h("button",{class:"btn ghost sm act",onclick:e=>{e.stopPropagation();const tm=tOf(t.d),d=addD(today,1);updTask(t.id,{d:tm?`${d}T${tm}:00+09:00`:d},"내일로 옮겼습니다")}},"내일로"):null,
-      o.acts?h("button",{class:"btn ghost sm act",style:"color:#c98a7e",onclick:e=>{e.stopPropagation();const b=e.currentTarget;if(b.dataset.arm){trash("tasks",t.id,"tasks")}else{b.dataset.arm="1";b.textContent="한 번 더";setTimeout(()=>{if(b.isConnected){delete b.dataset.arm;b.textContent="지우기"}},3000)}}},"지우기"):null));
+      // desk: 업무 줄 끝에서 바로 내일로 미루고 지운다(모든 업무 목록 공통). 지우기는 두 번 눌러야 옵시디언 휴지통으로 간다
+      o.acts!==false&&!isDone(t)?h("button",{class:"btn ghost sm act",onclick:e=>{e.stopPropagation();const tm=tOf(t.d),d=addD(today,1);updTask(t.id,{d:tm?`${d}T${tm}:00+09:00`:d},"내일로 옮겼습니다")}},"내일로"):null,
+      o.acts!==false?h("button",{class:"btn ghost sm act",style:"color:#c98a7e",onclick:e=>{e.stopPropagation();const b=e.currentTarget;if(b.dataset.arm){trash("tasks",t.id,"tasks")}else{b.dataset.arm="1";b.textContent="한 번 더";setTimeout(()=>{if(b.isConnected){delete b.dataset.arm;b.textContent="지우기"}},3000)}}},"지우기"):null));
   row.addEventListener("dragstart",e=>{e.dataTransfer.setData("text/task",t.id);e.dataTransfer.effectAllowed="move";row.classList.add("dragging")});
   row.addEventListener("dragend",()=>row.classList.remove("dragging"));
   return row;
@@ -1068,7 +1067,7 @@ function viewToday(){
     return h("button",{class:"dday "+(n===0?"d0":n<=3?"d3":"dn"),onclick:()=>openSheet("tasks",t.id),title:t.t},h("b",null,n===0?"D-DAY":"D-"+n),h("span",null,t.t))})):null;
 
   // 오늘 카드
-  const mix=[...evs.map(e=>[e.all?"":tOf(e.s),evRow(e,now)]),...todays.map(t=>[isDone(t)?"~~":tOf(t.d)||"~",taskRow(t,{noDate:!tOf(t.d),acts:true,bar:true})])].sort((a,b)=>a[0]<b[0]?-1:a[0]>b[0]?1:0);
+  const mix=[...evs.map(e=>[e.all?"":tOf(e.s),evRow(e,now)]),...todays.map(t=>[isDone(t)?"~~":tOf(t.d)||"~",taskRow(t,{noDate:!tOf(t.d)})])].sort((a,b)=>a[0]<b[0]?-1:a[0]>b[0]?1:0);
   const left=card("오늘",{icon:"today",count:`${doneToday}/${todays.length} 완료`,right:ring(todays.length?doneToday/todays.length:0,22,"var(--green)",3.5)},
     overdue.length?h("div",{id:"sec-over"},h("div",{class:"sec-t red"},`밀린 일 ${overdue.length}`,h("span",{class:"sp"}),
       h("button",{class:"btn ghost sm",onclick:()=>moveAllToday(overdue)},"모두 오늘로")),h("div",{class:"list"},overdue.map(t=>taskRow(t)))):null,
