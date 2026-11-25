@@ -1594,6 +1594,79 @@ function payCard(){
 /* ═════════ desk: 원본에서 다시 옮겨 온 화면 (viewPf, viewJob) ═════════ */
 const STAGES=["관심","서류 준비","지원 완료","면접","합격","불합격","보류"];
 const SCOL={"관심":"var(--gray)","서류 준비":"var(--yellow)","지원 완료":"var(--blue)","면접":"var(--purple)","합격":"var(--green)","불합격":"var(--red)","보류":"var(--brown)"};
+/* ═════════ desk: 게임잡 공고 — 게임 클라이언트 직무 공고를 내 조건 순으로 본다. 담은 공고만 저장한다 ═════════ */
+// 목록은 서버가 게임잡 목록 한 장과 공고별 조건 요약을 읽어 준 것이다. 이 화면에만 들고 저장하지 않는다
+S.gj={d:null,busy:false,err:null,open:{},body:{},busyNo:null,n:15,fresh:{}};
+// 내 조건. 화면에서 고치면 이 브라우저에 기억한다. 경력은 비워 두면 요구 연차를 정보로만 보여 준다
+const GJP=ls.get("desk:jobpref",{years:"",keys:"Unity, 유니티, C#",areas:"서울, 경기"});
+function gjLoad(force){
+  const G=S.gj;if(S.demo||G.busy||((G.d||G.err)&&!force))return;G.busy=true;G.err=null;
+  api("jobList",{}).then(r=>{G.d=r;const seen=ls.get("desk:gjseen",[]);G.fresh={};r.rows.forEach(x=>{if(!seen.includes(x.no))G.fresh[x.no]=true});
+      ls.set("desk:gjseen",[...new Set([...r.rows.map(x=>x.no),...seen])].slice(0,600))})
+    .catch(e=>{G.err=e.message}).finally(()=>{G.busy=false;if(S.view==="job")render()});
+}
+// 공고 하나를 내 조건과 대조한다. 점수와 함께 그 이유를 돌려준다. 요구 경력이 내 경력보다 높아도 빼지 않는다
+function gjScore(x,P){
+  const inf=x.info||{},txt=(x.role+" "+x.duty+" "+(inf["키워드"]||"")).toLowerCase(),why=[];let s=0;
+  const list=v=>String(v||"").split(",").map(k=>k.trim()).filter(Boolean);
+  const hit=list(P.keys).filter(k=>txt.includes(k.toLowerCase()));
+  if(hit.length){s+=Math.min(6,hit.length*3);why.push([hit.join("·"),"g"])}
+  const ar=x.area||inf["근무지역"]||"";
+  if(ar){if(list(P.areas).some(a=>ar.includes(a))){s+=3;why.push([ar.replace(" > "," "),"g"])}else{s-=2;why.push([ar.replace(" > "," ")+" · 지역 밖","b"])}}
+  const c=inf["경력"]||"",m=/(\d+)\s*년/.exec(c),my=parseFloat(P.years);
+  if(c&&!m){s+=1;why.push([c,"g"])}
+  else if(m&&isNaN(my))why.push([c,""]);
+  else if(m&&+m[1]<=my){s+=2;why.push([c+" · 충족","g"])}
+  else if(m)why.push([c+" · 내 경력보다 높음","w"]);
+  const e=inf["고용형태"]||"";if(e&&!/^정규직/.test(e))why.push([e.split(" (")[0],"w"]);
+  return {s,why,tier:s>=6?"잘 맞음":s>=3?"보통":"낮음"};
+}
+async function gjRead(x){
+  const G=S.gj;if(G.body[x.no])return G.body[x.no];if(G.busyNo)return null;
+  G.busyNo=x.no;render();
+  try{G.body[x.no]=await api("jobFetch",{url:x.link})}catch(e){toast("공고 내용을 읽지 못했습니다: "+e.message,"bad")}
+  finally{G.busyNo=null;render()}
+  return G.body[x.no]||null;
+}
+async function gjSave(x){
+  if((S.data.jobs||[]).some(j=>j.link===x.link))return;
+  const r=await gjRead(x);if(!r)return;
+  try{const made=await api("add",{kind:"job",fields:r.fields});(S.data.jobs=S.data.jobs||[]).push(made);toast("「"+x.n+"」을 지원 현황에 담았습니다");render()}
+  catch(e){toast("담지 못했습니다: "+e.message,"bad")}
+}
+function gjCard(){
+  gjLoad();
+  const G=S.gj,col={g:"var(--green)",b:"var(--red)",w:"var(--orange)","":"var(--gray)"},tcol={"잘 맞음":"var(--green)","보통":"var(--blue)","낮음":"var(--gray)"};
+  const pin=(id,key,ph,w)=>h("input",{class:"in",id,value:GJP[key],placeholder:ph,style:"width:"+w,"aria-label":ph,onchange:e=>{GJP[key]=e.target.value;ls.set("desk:jobpref",GJP);render()}});
+  const pref=h("div",{class:"row",style:"font-size:12px;color:var(--fg2)"},"내 조건",pin("gj-k","keys","우선 기술 (쉼표로)","200px"),pin("gj-a","areas","근무 지역 (쉼표로)","130px"),pin("gj-y","years","내 경력(년)","96px"),
+    h("span",{class:"faint"},"경력을 비워 두면 요구 연차를 정보로만 보여 줍니다. 높아도 빼지 않습니다."));
+  if(S.demo)return card("게임잡 공고",{icon:"news"},h("div",{class:"empty"},"예시 모드에서는 게임잡 공고를 읽지 않습니다"));
+  if(G.err)return card("게임잡 공고",{icon:"news"},h("div",{class:"banner"},"게임잡 공고를 읽지 못했습니다: "+G.err," ",h("button",{class:"btn sm",onclick:()=>gjLoad(true)},"다시 시도")));
+  if(!G.d)return card("게임잡 공고",{icon:"news",count:"불러오는 중…"},h("div",{class:"empty"},"게임잡에서 게임 클라이언트 공고를 읽는 중입니다. 처음에는 20초쯤 걸립니다."));
+  const rows=G.d.rows.map((x,i)=>Object.assign({i,sc:gjScore(x,GJP),saved:(S.data.jobs||[]).some(j=>j.link===x.link)},x)).sort((a,b)=>b.sc.s-a.sc.s||a.i-b.i);
+  const fresh=rows.filter(x=>G.fresh[x.no]).length,good=rows.filter(x=>x.sc.tier==="잘 맞음").length;
+  const INFO=["경력","학력","고용형태","급여","직급/직책","모집인원","모집분야","키워드","게임분야","대표게임","근무지역","마감일"];
+  return card("게임잡 공고",{icon:"news",count:"클라이언트 직무 "+rows.length+"건 · 잘 맞음 "+good+"건"+(fresh?" · 새 공고 "+fresh+"건":""),
+      right:h("button",{class:"btn ghost sm","aria-label":"다시 읽기",title:"목록 "+agoTxt(G.d.at)+" 기준",onclick:()=>gjLoad(true)},ic("refresh"))},pref,
+    h("div",{style:"min-width:0;overflow:hidden"},rows.slice(0,G.n).map(x=>{const op=!!G.open[x.no],bd=G.body[x.no],inf=x.info||{};
+      return h("div",{style:"border-top:.5px solid var(--line)"},
+        h("button",{class:"lrow",style:"border-top:0","aria-expanded":String(op),onclick:()=>{G.open[x.no]=!op;render()}},
+          h("b",null,G.fresh[x.no]?h("span",{class:"pill orange",style:"margin-right:6px"},"새"):null,x.n," · ",x.role),
+          h("small",null,h("span",{class:"tag",style:"margin-right:8px"},h("i",{style:"background:"+tcol[x.sc.tier]}),x.sc.tier),
+            x.sc.why.map(([t,k])=>h("span",{class:"tag",style:"margin-right:8px"},h("i",{style:"background:"+col[k]}),t)),
+            [x.end?"마감 "+x.end:null,x.saved?"담음":null].filter(Boolean).join(" · "))),
+        op?h("div",{style:"padding:2px 4px 12px"},
+          h("div",{class:"md"},h("div",{class:"mdt"},h("table",null,INFO.filter(k=>inf[k]).map(k=>h("tr",null,h("th",{style:"white-space:nowrap"},k),h("td",null,inf[k])))))),
+          h("div",{class:"row",style:"margin:8px 0"},
+            bd?null:h("button",{class:"btn",disabled:G.busyNo?"disabled":null,onclick:()=>gjRead(x)},G.busyNo===x.no?"읽는 중… (그림 공고는 10초쯤)":"공고 내용 읽기"),
+            x.saved?h("span",{class:"faint",style:"font-size:12px"},"지원 현황에 담았습니다"):h("button",{class:"btn pri",disabled:G.busyNo?"disabled":null,onclick:()=>gjSave(x)},"지원 현황에 담기"),
+            h("a",{class:"btn ghost",href:x.link,target:"_blank",rel:"noopener",style:"text-decoration:none"},"게임잡에서 지원")),
+          bd?h("div",null,h("div",{class:"faint",style:"font-size:12px;margin-bottom:4px"},bd.read.images?"그림 "+bd.read.images+"장에서 읽은 글입니다. 꾸밈 글자가 섞일 수 있습니다.":bd.read.text?"공고에 적힌 글입니다.":"공고 내용을 읽지 못했습니다."+(bd.read.error?" ("+bd.read.error+")":"")),
+            h("p",{style:"white-space:pre-wrap;font-size:13px;line-height:1.7;margin:0;overflow-wrap:anywhere"},bd.fields.post)):null):null)})),
+    rows.length>G.n?h("button",{class:"btn",onclick:()=>{G.n+=15;render()}},"더 보기 ("+(rows.length-G.n)+"건 남음)"):null,
+    h("div",{class:"faint",style:"font-size:12px"},"순서는 우선 기술, 근무 지역, 경력 조건으로 매깁니다. 목록은 저장하지 않고, 「지원 현황에 담기」를 누른 공고만 저장합니다."));
+}
+
 function jobsCard(){
   const js=S.data.jobs||[],main=STAGES.slice(0,5),rest=STAGES.slice(5);
   const col=st=>dropZone(h("div",{class:"col"},h("header",null,h("span",{class:"tag"},h("i",{style:`background:${SCOL[st]}`}),st),h("span",{class:"faint"},js.filter(j=>(j.st||"관심")===st).length)),
@@ -2056,7 +2129,7 @@ function viewJob(){
     h("div",{class:"faint",style:"font-size:12.5px;line-height:1.7"},"업무를 끝낼 때 성과를 한 줄 적어 두면 지원서에 그대로 쓸 수 있습니다. 경력기술서·자기소개서 최신본은 위 「서류 준비」에 있습니다."),
     h("div",{class:"row",style:"gap:8px;flex-wrap:wrap"},h("button",{class:"btn pri",onclick:()=>{S.view="pf";ls.set("desk:view","pf");render()}},"성과 기록하러 가기"),
       h("button",{class:"btn",disabled:st.n?null:"disabled",onclick:()=>pfCopy(cvLines(st).join("\n"),"경력기술서 문장을 복사했습니다")},"경력기술서 문장 복사")));
-  return [h("div",{class:"kpis",style:"grid-template-columns:repeat(6,minmax(0,1fr))"},flow.map(([n,v,s])=>kpi(n,v,"건",s))),fitC,docsCard(),h("div",{class:"grid g2"},dueCard,mailC),jobsCard(),pfC];
+  return [h("div",{class:"kpis",style:"grid-template-columns:repeat(6,minmax(0,1fr))"},flow.map(([n,v,s])=>kpi(n,v,"건",s))),gjCard(),fitC,docsCard(),h("div",{class:"grid g2"},dueCard,mailC),jobsCard(),pfC];
 }
 const gmailUrl=(acct,id)=>`https://mail.google.com/mail/u/?authuser=${encodeURIComponent(acct||"")}#all/${id}`;
 function mailBox(src){return S.data} // desk: 구글 계정이 하나다
