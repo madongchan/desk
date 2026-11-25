@@ -90,9 +90,9 @@ function makeContext(root, props, files) {
   };
   const threads = [mk('t1', '채용 공고 안내', '"어느 회사" <hr@example.com>', true), mk('t2', '', 'f@example.com', false)];
   // 가짜 바깥 웹과 가짜 글자 읽기(OCR). web에 주소 → { text } 또는 { bytes, type }을 넣어 두면 그 주소가 답한다
-  const web = {}, ocr = { text: '', made: [], types: [], removed: [], fail: false };
+  const web = {}, ocr = { text: '', made: [], types: [], removed: [], fail: false, batches: [], fetched: [] };
   const ctx = vm.createContext({
-    UrlFetchApp: { fetch: url => { const r = web[url];
+    UrlFetchApp: { fetchAll(reqs) { ocr.batches.push(reqs.length); return reqs.map(q => this.fetch(q.url)); }, fetch: url => { const r = web[url]; ocr.fetched.push(url);
       return { getResponseCode: () => (r ? 200 : 404), getContentText: () => (r && r.text) || '',
         getBlob: () => { let type = (r && r.type) || 'text/html';
           return { getBytes: () => (r && r.bytes) || Buffer.from((r && r.text) || ''), getContentType: () => type, setContentType(t) { type = t; return this; } }; } }; } },

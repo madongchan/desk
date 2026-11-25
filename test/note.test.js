@@ -172,6 +172,20 @@ assert.deepStrictEqual([jp.d, jp.post], [null, '']);                            
 jp = N.parseJobPage('<html><title>제목만 있는 페이지</title></html>', '');
 assert.deepStrictEqual([jp.n, jp.role, jp.memo], ['', '제목만 있는 페이지', '']);
 assert.strictEqual(N.parseJobPage(PAGE, '<p>' + '가'.repeat(30000) + '</p>').post.length, 12000);    // 너무 긴 본문은 자른다
+assert.deepStrictEqual(N.parseJobPage(PAGE, BODY).info, { '경력': '3년 이상', '모집분야': '게임개발(클라이언트), 게임개발(모바일)', '마감일': '2026.12.05', '근무지역': '서울 > 서초구' });
+// 목록 페이지: 공고 한 줄마다 번호, 회사, 제목, 직무, 플랫폼, 근무지, 마감 표시를 뽑는다. 같은 공고가 두 번 나오면 한 번만
+const ROW = (no, title, co, duty, plat, area, dday) => '<li><div class="company"><strong>' + co + '</strong></div><div class="description">' +
+  '<a href="/Recruit/GI_Read/View?GI_No=' + no + '" onclick="GA_Application_Prdt(\'02_공고클릭\', \'Y\', \'' + title + '\', \'' + no + '\', \'' + co + '\', \'어느 채용관\', ' +
+  'IsNullOrWhiteSpace(\'' + duty + '\'), IsNullOrWhiteSpace(\'' + plat + '\'), \'없음\', IsNullOrWhiteSpace(\'' + area + '\'));" target="_blank">' + title.slice(0, 8) + '...</a>' +
+  (dday == null ? '' : ' <span class="dday">' + dday + '</span>') + '</div></li>';
+const LIST = ROW(11, '[경력] Unity 클라이언트 프로그래머', '㈜어느게임즈', '게임개발(클라이언트), 게임개발(모바일)', '모바일게임', '서울 &gt; 서초구, ', '채용시') +
+  ROW(12, '언리얼 엔진 프로그래머', '다른스튜디오', '게임개발(클라이언트)', '', '경기 &gt; 성남시 분당구, ', 'D-3') + ROW(11, '[경력] Unity 클라이언트 프로그래머', '㈜어느게임즈', 'x', 'x', 'x', '채용시') +
+  ROW(13, '마감 표시 없는 공고', '셋째회사', '', '', '', null);
+assert.deepStrictEqual(N.parseJobList(LIST), [
+  { no: '11', n: '㈜어느게임즈', role: '[경력] Unity 클라이언트 프로그래머', duty: '게임개발(클라이언트), 게임개발(모바일)', plat: '모바일게임', area: '서울 > 서초구', end: '채용시' },
+  { no: '12', n: '다른스튜디오', role: '언리얼 엔진 프로그래머', duty: '게임개발(클라이언트)', plat: '', area: '경기 > 성남시 분당구', end: 'D-3' },
+  { no: '13', n: '셋째회사', role: '마감 표시 없는 공고', duty: '', plat: '', area: '', end: '' }]);
+assert.deepStrictEqual(N.parseJobList('<html>공고 없음</html>'), []);
 // 본문에 넣은 그림의 주소를 뽑는다. https만, 겹친 것은 한 번만, 네 장까지
 assert.deepStrictEqual(N.jobImages('<img src="https://a.example/1.jpg" alt="x"><IMG class="k" src=\'//b.example/2.png\'><img src="http://c.example/3.jpg"><img src="https://a.example/1.jpg"><img src="/rel.png">'),
   ['https://a.example/1.jpg', 'https://b.example/2.png']);

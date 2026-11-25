@@ -334,8 +334,29 @@ function parseJobPage(html, bodyHtml) {
     n: og ? og[1] : '', role: og ? og[2] : first(/<title>([\s\S]*?)<\/title>/i),
     d: date ? date[1] + '-' + two(date[2]) + '-' + two(date[3]) : null,
     memo: pairs.filter(function (p) { return p[0] && p[1]; }).map(function (p) { return p[0] + ': ' + p[1]; }).join(' · ').slice(0, 1000),
+    info: pairs.reduce(function (o, p) { if (p[0] && p[1] && !has_(o, p[0])) o[p[0]] = p[1]; return o; }, {}),
     post: post.slice(0, JOB_POST_MAX),
   };
+}
+
+/**
+ * 채용 목록 페이지 한 장에서 공고마다 번호, 회사, 제목, 직무, 플랫폼, 근무지, 마감 표시를 뽑는다.
+ * 목록의 공고 링크에 이 값들이 정돈돼 들어 있어서, 공고를 하나씩 열지 않고 한 장으로 요약 목록이 나온다.
+ * 같은 공고가 여러 구역에 겹쳐 나오면 처음 것만 쓴다.
+ */
+function parseJobList(html) {
+  const out = [], seen = {};
+  const arg = "'((?:[^'\\\\]|\\\\.)*)'", wrapped = "IsNullOrWhiteSpace\\('((?:[^'\\\\]|\\\\.)*)'\\)";
+  const re = new RegExp('GI_Read/View\\?GI_No=(\\d+)" onclick="GA_Application_Prdt\\(' + ["'[^']*'", "'[^']*'", arg, "'\\d+'", arg, "'[^']*'", wrapped, wrapped, "'[^']*'", wrapped].join(',\\s*') +
+    '\\);"[^>]*>[\\s\\S]*?</a>(?:\\s*<span class="dday">([^<]*)</span>)?', 'g');
+  const txt = function (s) { return htmlText_(s).replace(/\n/g, ' ').replace(/[,\s]+$/, ''); };
+  let m;
+  while ((m = re.exec(String(html || '')))) {
+    if (seen[m[1]]) continue;
+    seen[m[1]] = true;
+    out.push({ no: m[1], n: txt(m[3]), role: txt(m[2]), duty: txt(m[4]), plat: txt(m[5]), area: txt(m[6]), end: txt(m[7] || '') });
+  }
+  return out;
 }
 
 /** 본문 틀에 넣은 그림의 주소. 공고를 그림으로 올린 회사가 많다. https만, 겹친 것은 한 번만, 네 장까지. */
@@ -352,6 +373,6 @@ function jobImages(bodyHtml) {
 if (typeof module !== 'undefined') {
   module.exports = {
     KINDS: KINDS, listRecords: listRecords, ensureIds: ensureIds, addRecord: addRecord,
-    updateRecord: updateRecord, takeRecord: takeRecord, cleanTitle: cleanTitle, parseLog: parseLog, parseCommits: parseCommits, parseJobPage: parseJobPage, jobImages: jobImages,
+    updateRecord: updateRecord, takeRecord: takeRecord, cleanTitle: cleanTitle, parseLog: parseLog, parseCommits: parseCommits, parseJobPage: parseJobPage, jobImages: jobImages, parseJobList: parseJobList,
   };
 }

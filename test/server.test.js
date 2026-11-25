@@ -370,6 +370,23 @@ assert.match(r.data.read.error, /Request Too Large/);
 g.ocr.fail = false;
 assert.match(post('jobFetch', { url: GJ + '/Recruit/GI_Read/View?GI_No=404' }).error, /공고를 읽지 못했습니다/);
 
+// 공고 목록: 목록 한 장을 읽고, 공고별 조건 요약은 다섯 장씩 끊어 받아 기억해 둔다. 저장은 하지 않는다
+assert.match(post('jobList', {}).error, /목록을 읽지 못했습니다/);
+const row = no => '<a href="/Recruit/GI_Read/View?GI_No=' + no + '" onclick="GA_Application_Prdt(\'02_공고클릭\', \'Y\', \'공고 ' + no + '\', \'' + no + '\', \'회사 ' + no + '\', \'관\', ' +
+  'IsNullOrWhiteSpace(\'게임개발(클라이언트)\'), IsNullOrWhiteSpace(\'모바일게임\'), \'없음\', IsNullOrWhiteSpace(\'서울 &gt; 강남구, \'));" target="_blank">공고</a> <span class="dday">~12/20</span>';
+const nos = [101, 102, 103, 104, 105, 106, 107];
+g.web[GJ + '/Recruit/joblist?menucode=duty&duty=1'] = { text: nos.map(row).join('') };
+nos.slice(0, 6).forEach(no => { g.web[GJ + '/Recruit/GI_Read/View?GI_No=' + no] = { text: '<dl><dt class="recruit-data-title">경력</dt><dd class="recruit-data-text">경력 ' + (no - 100) + '년 이상</dd></dl>' }; });
+g.ocr.batches.length = 0;
+r = post('jobList', {});
+assert.strictEqual(r.ok, true, r.error);
+assert.deepStrictEqual(r.data.rows.map(x => [x.no, x.n, x.area, x.end, x.info['경력'] || null]).slice(0, 2), [['101', '회사 101', '서울 > 강남구', '~12/20', '경력 1년 이상'], ['102', '회사 102', '서울 > 강남구', '~12/20', '경력 2년 이상']]);
+assert.deepStrictEqual([r.data.rows.length, r.data.rows[6].info, r.data.rows[0].link], [7, {}, GJ + '/Recruit/GI_Read/View?GI_No=101']);   // 못 읽은 공고도 목록에는 남긴다
+assert.deepStrictEqual(g.ocr.batches, [5, 2]);                                                 // 다섯 장씩 끊어 받는다
+g.ocr.batches.length = 0;
+post('jobList', {});
+assert.deepStrictEqual(g.ocr.batches, [1]);                                                    // 읽은 것은 기억해 두고, 못 읽은 한 장만 다시 청한다
+
 // 일정 추가: 입력을 검사한 뒤 캘린더에 쓴다
 assert.strictEqual(post('eventAdd', { title: '회의', date: '11/25' }).ok, false);
 assert.strictEqual(post('eventAdd', { title: ' ', date: today }).ok, false);

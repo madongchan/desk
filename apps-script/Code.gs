@@ -13,7 +13,7 @@
  */
 
 const TZ = 'Asia/Seoul';
-const VERSION = '2026-11-25d';
+const VERSION = '2026-11-25e';
 const WORK_FILE = '작업 목록.json';   // PC의 tools/sync-vault.js가 쓰는 파일. 서버는 읽기만 한다
 const GIT_FILE = '작업 내역.md';   // PC의 tools/sync-git.js가 쓰는 파일. 서버는 읽기만 한다
 // 지원 서류: PC의 portfolio 저장소 build.js가 desk 폴더에 쓰는 한 파일짜리 문서들. 서버는 이 이름들만, 읽기만 한다
@@ -174,6 +174,9 @@ function one_(text, kind, id) {
 
 // 게임잡 공고 한 장의 주소. 주소 끝까지 맞아야 하고(다른 사이트 주소에 끼워 넣은 것을 막는다) 번호는 숫자만 받는다
 const JOB_URL_RE = /^https?:\/\/(?:www\.)?gamejob\.co\.kr\/Recruit\/GI_Read\/View\?(?:[^#\s]*&)?GI_No=(\d{1,12})(?:[&#][^\s]*)?$/i;
+
+const JOB_VIEW_URL = 'https://www.gamejob.co.kr/Recruit/GI_Read/View?GI_No=';
+const JOB_LIST_URL = 'https://www.gamejob.co.kr/Recruit/joblist?menucode=duty&duty=1';   // 직무: 게임개발(클라이언트)
 
 /** 바깥 웹 페이지 한 장을 글로 받는다. */
 function webText_(url) {
@@ -444,6 +447,32 @@ const ACTIONS = {
   },
 
   /**
+   * 게임잡의 게임 클라이언트 직무 목록 한 장을 읽어 공고 요약 목록으로 돌려준다. 저장하지 않는다.
+   * 목록에는 회사, 제목, 직무, 근무지, 마감 표시만 있다. 경력·키워드·고용형태 같은 조건은 공고 페이지의 요약 칸에 있어서
+   * 공고마다 한 장씩 읽되, 다섯 장씩 끊어 받고 한 번 읽은 것은 6시간 기억한다(사이트에 한꺼번에 몰아 청하지 않는다). 본문과 그림은 읽지 않는다.
+   */
+  jobList: function () {
+    const rows = parseJobList(webText_(JOB_LIST_URL));
+    if (!rows.length) throw new Error('게임잡 목록을 읽지 못했습니다');
+    const cache = CacheService.getScriptCache(), need = [];
+    rows.forEach(function (r) {
+      const c = cache.get('gj:' + r.no);
+      if (c) r.info = JSON.parse(c); else need.push(r);
+      r.link = JOB_VIEW_URL + r.no;
+    });
+    for (let i = 0; i < need.length; i += 5) {
+      const part = need.slice(i, i + 5);
+      if (i) Utilities.sleep(300);
+      UrlFetchApp.fetchAll(part.map(function (r) { return { url: r.link, muteHttpExceptions: true }; })).forEach(function (resp, k) {
+        const info = resp.getResponseCode() === 200 ? parseJobPage(resp.getContentText('UTF-8'), '').info : {};
+        part[k].info = info;
+        if (Object.keys(info).length) cache.put('gj:' + part[k].no, JSON.stringify(info), 21600);
+      });
+    }
+    return { at: new Date().toISOString(), rows: rows };
+  },
+
+  /**
    * 사용자가 붙여 넣은 게임잡 공고 주소 한 장을 읽어 지원처 칸으로 돌려준다. 저장은 하지 않는다(화면이 받아서 추가한다).
    * 공고 번호만 뽑아 주소를 서버가 다시 만든다. 사용자가 준 주소를 그대로 읽지 않으므로 다른 곳을 읽어 주는 길이 되지 않는다.
    * 사이트를 훑지 않는다. 누를 때 그 한 장(공고 페이지, 본문 틀, 본문에 넣은 그림)만 읽는다.
@@ -451,7 +480,7 @@ const ACTIONS = {
   jobFetch: function (a) {
     const m = JOB_URL_RE.exec(String(a.url || '').trim());
     if (!m) throw new Error('게임잡 공고 주소만 가져올 수 있습니다(…gamejob.co.kr/Recruit/GI_Read/View?GI_No=번호)');
-    const link = 'https://www.gamejob.co.kr/Recruit/GI_Read/View?GI_No=' + m[1];
+    const link = JOB_VIEW_URL + m[1];
     const body = webText_('https://www.gamejob.co.kr/Recruit/GI_Read_Comt_Ifrm?gno=' + m[1]);
     const job = parseJobPage(webText_(link), body);
     if (!job.n && !job.role) throw new Error('공고를 읽지 못했습니다. 마감됐거나 주소가 바뀌었을 수 있습니다');
