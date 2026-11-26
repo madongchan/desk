@@ -254,6 +254,20 @@ assert.match(text('카테고리.md'), / {4}순서:: 2\n/);
 assert.strictEqual(post('trash', { kind: 'cat', id: r.data.id }).ok, true);
 assert.deepStrictEqual(post('load', {}).data.cats, []);
 assert.match(text('휴지통.md'), /카테고리\.md에서 지움 %%\n- \[ \] 공부 \^/);
+// 같은 이름은 두 번 적지 않는다. 이미 있으면 있는 것을 돌려준다(저장이 겹쳐 두 번 청해도 하나만 남게)
+const c1 = post('add', { kind: 'cat', fields: { n: '겹침', o: 3 } }).data, c2 = post('add', { kind: 'cat', fields: { n: '겹침', o: 4 } }).data;
+assert.strictEqual(c1.id, c2.id);
+assert.strictEqual((text('카테고리.md').match(/겹침/g) || []).length, 1);
+// 카테고리 지우기는 한 번의 요청으로: 그 이름의 카테고리를 모두 휴지통으로, 그 이름을 쓰던 업무는 카테고리만 비운다
+fileOf('카테고리.md').setContent(text('카테고리.md') + '- [ ] 겹침 ^dup001\n    순서:: 9\n');   // 예전에 생긴 같은 이름 두 줄
+const u1 = post('add', { kind: 'tasks', fields: { t: '겹침을 쓰는 업무 하나', p: '겹침' } }).data.id, u2 = post('add', { kind: 'tasks', fields: { t: '겹침을 쓰는 업무 둘', p: '겹침' } }).data.id;
+r = post('catDelete', { n: '겹침' });
+assert.deepStrictEqual([r.ok, r.data.cats, r.data.tasks], [true, 2, 2]);
+r = post('load', {});
+assert.ok(!r.data.cats.some(c => c.n === '겹침'));
+assert.deepStrictEqual(r.data.tasks.filter(t => t.id === u1 || t.id === u2).map(t => [t.t, t.p || null]), [['겹침을 쓰는 업무 하나', null], ['겹침을 쓰는 업무 둘', null]]);
+assert.match(post('catDelete', { n: '' }).error, /카테고리 이름/);
+post('trash', { kind: 'tasks', id: u1 }); post('trash', { kind: 'tasks', id: u2 });
 // 지메일: 받은편지함 목록은 읽기에 딸려 오고, 본문과 처리와 공고 검색은 따로 요청한다
 r = post('load', {});
 assert.deepStrictEqual(r.data.mail.map(m => [m.id, m.subj, m.from, m.unread, m.n]), [['t1', '채용 공고 안내', '어느 회사', true, 1], ['t2', '(제목 없음)', 'f@example.com', false, 1]]);

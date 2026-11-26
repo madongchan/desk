@@ -1003,10 +1003,11 @@ function saveCatOrder(names){
 // desk: 카테고리 지우기. 노트에 있으면 휴지통으로 옮기고, 그 이름을 쓰던 업무는 카테고리를 비운다(안 비우면 업무에 쓰인 이름이라 목록에 다시 나온다)
 let catDelT=null;
 function delCat(n){
-  const c=(S.data.cats||[]).find(x=>x.n===n),ts=(S.data.tasks||[]).filter(t=>t.p===n&&!String(t.id).startsWith("tmp")).map(t=>t.id);
+  const ts=(S.data.tasks||[]).filter(t=>t.p===n);
   if(S.qpick&&S.qpick.p===n)S.qpick.p=null;if(S.f&&S.f.p===n)S.f.p="";
   return mutate(D=>{D.cats=(D.cats||[]).filter(x=>x.n!==n);(D.tasks||[]).forEach(t=>{if(t.p===n)t.p=null})},
-    async()=>{if(c&&!String(c.id).startsWith("tmp"))await api("trash",{kind:"cat",id:c.id});for(const id of ts)await api("update",{kind:"tasks",id,fields:{p:null}})},
+    // 서버가 한 번의 잠금 안에서 같은 이름의 카테고리를 모두 지우고 업무의 카테고리를 비운다(하나씩 보내면 그 사이 다시 읽혀 되살아난다)
+    ()=>api("catDelete",{n}),
     "「"+n+"」 카테고리를 지웠습니다"+(ts.length?" · 업무 "+ts.length+"건에서 뺐습니다":""));
 }
 function favCat(n){const c=(S.data.cats||[]).find(x=>x.n===n);if(!c)return addCat(n,true);if(String(c.id).startsWith("tmp"))return;const on=!c.fav;
@@ -1168,7 +1169,7 @@ function quickAdd(){
 // desk: 대시보드에서 날짜 없이 적은 할 일은 오늘로 넣는다. 다른 화면은 날짜 없음 그대로
 const quickDefaultDay=()=>S.view==="today"?TODAY():null;
 // desk: 카테고리 목록 = 카테고리 노트 + 업무 노트에 이미 쓴 이름. 즐겨찾기가 먼저
-function catList(){const D=S.data||{},out=(D.cats||[]).map(c=>({n:c.n,fav:!!c.fav,o:c.o}));
+function catList(){const D=S.data||{},out=[];(D.cats||[]).forEach(c=>{if(!out.some(x=>x.n===c.n))out.push({n:c.n,fav:!!c.fav,o:c.o})}); // desk: 같은 이름이 노트에 두 번 있어도 한 줄만
   (D.tasks||[]).forEach(t=>{if(t.p&&!out.some(c=>c.n===t.p))out.push({n:t.p,fav:false,o:null})});
   syncProjects(out.map(c=>c.n));return out.sort((a,b)=>((a.o??1e9)-(b.o??1e9))||a.n.localeCompare(b.n,"ko"))} // desk: 끌어서 정한 순서대로
 // desk: 즐겨찾기(★)는 단추로 바로 고르고, 나머지는 「그 밖에」 목록에서 고른다. 목록에서 별로 즐겨찾기를 켜고 끄고, 새 카테고리를 만든다

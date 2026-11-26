@@ -13,7 +13,7 @@
  */
 
 const TZ = 'Asia/Seoul';
-const VERSION = '2026-11-26a';
+const VERSION = '2026-11-26b';
 const WORK_FILE = '작업 목록.json';   // PC의 tools/sync-vault.js가 쓰는 파일. 서버는 읽기만 한다
 const GIT_FILE = '작업 내역.md';   // PC의 tools/sync-git.js가 쓰는 파일. 서버는 읽기만 한다
 // 지원 서류: PC의 portfolio 저장소 build.js가 desk 폴더에 쓰는 한 파일짜리 문서들. 서버는 이 이름들만, 읽기만 한다
@@ -342,6 +342,11 @@ const ACTIONS = {
     if (a.kind === 'att') checkAtt_(fields);
     if (a.kind === 'pay') checkPay_(fields);
     return withLock_(function () {
+      // 카테고리는 이름이 곧 정체다. 이미 있으면 새로 적지 않고 있는 것을 돌려준다(저장이 겹쳐 두 번 청해도 하나만 남게)
+      if (a.kind === 'cat') {
+        const had = rows_(open_(folder, 'cat'), 'cat').filter(function (c) { return c.n === cleanTitle(fields.n); })[0];
+        if (had) return had;
+      }
       const id = makeId_();
       const text = addRecord(open_(folder, a.kind), a.kind, fields, id);
       writeText_(folder, KINDS[a.kind].file, text);
@@ -355,6 +360,29 @@ const ACTIONS = {
       const text = updateRecord(open_(folder, a.kind), a.kind, a.id, stampDone_(a.kind, Object.assign({}, a.fields)));
       writeText_(folder, KINDS[a.kind].file, text);
       return one_(text, a.kind, a.id);
+    });
+  },
+
+  /**
+   * 카테고리 지우기. 한 번의 잠금 안에서 그 이름의 카테고리 줄을 모두 휴지통으로 옮기고, 그 이름을 쓰던 업무는 카테고리만 비운다.
+   * 업무를 하나씩 따로 고치면 수십 번 요청하는 동안 화면이 다시 읽혀 이름이 되살아난다.
+   */
+  catDelete: function (a, folder) {
+    const n = cleanTitle(a.n);
+    if (!n) throw new Error('카테고리 이름이 비어 있습니다');
+    return withLock_(function () {
+      let cats = open_(folder, 'cat'), tasks = open_(folder, 'tasks'), bin = readText_(folder, TRASH) || '', nc = 0, nt = 0;
+      if (bin && !/\n$/.test(bin)) bin += '\n';
+      rows_(cats, 'cat').filter(function (c) { return c.n === n; }).forEach(function (c) {
+        const k = takeRecord(cats, c.id);
+        cats = k.text; nc++;
+        bin += '%% ' + ymd_(new Date()) + ' ' + KINDS.cat.file + '에서 지움 %%\n' + k.block;
+      });
+      rows_(tasks, 'tasks').filter(function (t) { return t.p === n; }).forEach(function (t) { tasks = updateRecord(tasks, 'tasks', t.id, { p: null }); nt++; });
+      // 휴지통을 먼저 쓴다. 중간에 끊겨도 건이 두 곳에 보일 뿐 사라지지 않는다
+      if (nc) { writeText_(folder, TRASH, bin); writeText_(folder, KINDS.cat.file, cats); }
+      if (nt) writeText_(folder, KINDS.tasks.file, tasks);
+      return { cats: nc, tasks: nt };
     });
   },
 
