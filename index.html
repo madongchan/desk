@@ -543,6 +543,9 @@ tr.cur td{background:rgba(91,122,153,.1)}
 .catpop{flex-basis:100%;display:grid;gap:2px;max-width:300px;background:var(--card-2);border:.5px solid var(--line);border-radius:10px;padding:6px}
 .catpop .it{display:flex;align-items:center;gap:4px;border-radius:7px}
 .catpop .it.on,.catpop .it:hover{background:rgba(255,255,255,.06)}
+.catpop .hd{border:0;background:transparent;width:22px;padding:6px 0;color:var(--fg3);cursor:grab;touch-action:none;user-select:none;font-size:14px;line-height:1}
+.catpop .hd:active{cursor:grabbing}
+.catpop .it.drag{background:rgba(255,255,255,.1);box-shadow:0 4px 14px rgba(0,0,0,.35)}
 .catpop .st{border:0;background:transparent;font-size:16px;width:28px;color:var(--fg3);cursor:pointer}
 .catpop .st.full{color:#c4ad7a}
 .catpop .nm{border:0;background:transparent;flex:1;text-align:left;padding:6px 4px;font-size:13px;color:var(--fg);cursor:pointer}
@@ -955,6 +958,25 @@ function addTask(fields){
 // desk: 카테고리는 desk/카테고리.md에 이름과 즐겨찾기만 적는다
 function addCat(n,fav){const tmp="tmp-c"+Date.now();
   return mutate(D=>(D.cats=D.cats||[]).push({id:tmp,n,fav:fav||null}),async()=>{const r=await api("add",{kind:"cat",fields:{n,fav:!!fav}});replaceIn(S.data.cats,tmp,r)})}
+// desk: 손잡이를 누른 채 위아래로 끌면 줄이 따라 옮겨지고, 놓을 때 순서를 저장한다. 끄는 동안은 화면을 다시 그리지 않고 줄만 옮긴다
+function catDrag(e){
+  if(e.button>0)return;e.preventDefault();
+  const hd=e.currentTarget,row=hd.closest(".it"),pop=row.parentElement;row.classList.add("drag");
+  const move=ev=>{const rows=[...pop.querySelectorAll(".it")].filter(r=>r!==row),after=rows.find(r=>{const b=r.getBoundingClientRect();return ev.clientY<b.top+b.height/2});
+    if(after)pop.insertBefore(row,after);else{const last=rows[rows.length-1];if(last)last.after(row)}};
+  const up=()=>{removeEventListener("pointermove",move);removeEventListener("pointerup",up);removeEventListener("pointercancel",up);row.classList.remove("drag");
+    saveCatOrder([...pop.querySelectorAll(".it")].map(r=>r.dataset.n))};
+  // 줄을 옮기면 손잡이가 포인터를 놓치므로 창 전체에서 받는다
+  addEventListener("pointermove",move);addEventListener("pointerup",up);addEventListener("pointercancel",up);
+}
+// 순서가 바뀐 것만 고친다. 카테고리 노트에 없는 이름(업무에만 쓴 이름)은 노트에 새로 적는다
+function saveCatOrder(names){
+  const jobs=[];names.forEach((n,i)=>{const o=i+1,c=(S.data.cats||[]).find(x=>x.n===n);
+    if(!c)jobs.push({n,o,tmp:"tmp-c"+o+"-"+Date.now()});else if(c.o!==o&&!String(c.id).startsWith("tmp"))jobs.push({id:c.id,o})});
+  if(!jobs.length)return;
+  return mutate(D=>{jobs.forEach(j=>{if(j.tmp)(D.cats=D.cats||[]).push({id:j.tmp,n:j.n,fav:null,o:j.o});else byId(D.cats,j.id).o=j.o})},
+    async()=>{for(const j of jobs){if(j.tmp){const r=await api("add",{kind:"cat",fields:{n:j.n,o:j.o}});replaceIn(S.data.cats,j.tmp,r)}else await api("update",{kind:"cat",id:j.id,fields:{o:j.o}})}},"순서를 바꿨습니다");
+}
 function favCat(n){const c=(S.data.cats||[]).find(x=>x.n===n);if(!c)return addCat(n,true);if(String(c.id).startsWith("tmp"))return;const on=!c.fav;
   return mutate(D=>{byId(D.cats,c.id).fav=on||null},async()=>{const r=await api("update",{kind:"cat",id:c.id,fields:{fav:on}});replaceIn(S.data.cats,c.id,r)})}
 function toggleTask(t,el){
@@ -1112,14 +1134,15 @@ function quickAdd(){
 // desk: 대시보드에서 날짜 없이 적은 할 일은 오늘로 넣는다. 다른 화면은 날짜 없음 그대로
 const quickDefaultDay=()=>S.view==="today"?TODAY():null;
 // desk: 카테고리 목록 = 카테고리 노트 + 업무 노트에 이미 쓴 이름. 즐겨찾기가 먼저
-function catList(){const D=S.data||{},out=(D.cats||[]).map(c=>({n:c.n,fav:!!c.fav}));
-  (D.tasks||[]).forEach(t=>{if(t.p&&!out.some(c=>c.n===t.p))out.push({n:t.p,fav:false})});
-  syncProjects(out.map(c=>c.n));return out.sort((a,b)=>(b.fav-a.fav)||a.n.localeCompare(b.n,"ko"))}
+function catList(){const D=S.data||{},out=(D.cats||[]).map(c=>({n:c.n,fav:!!c.fav,o:c.o}));
+  (D.tasks||[]).forEach(t=>{if(t.p&&!out.some(c=>c.n===t.p))out.push({n:t.p,fav:false,o:null})});
+  syncProjects(out.map(c=>c.n));return out.sort((a,b)=>((a.o??1e9)-(b.o??1e9))||a.n.localeCompare(b.n,"ko"))} // desk: 끌어서 정한 순서대로
 // desk: 즐겨찾기(★)는 단추로 바로 고르고, 나머지는 「그 밖에」 목록에서 고른다. 목록에서 별로 즐겨찾기를 켜고 끄고, 새 카테고리를 만든다
 function catPicker(key,val,pick){
   const list=catList(),open=S.catOpen===key,other=val&&!list.some(c=>c.fav&&c.n===val)?val:null,close=()=>{S.catOpen=null};
   const addNew=()=>{const n=(S.drafts["cat-new"]||"").trim();if(!n)return;S.drafts["cat-new"]="";close();if(!list.some(c=>c.n===n))addCat(n);pick(n)};
-  const box=open?h("div",{class:"catpop"},list.map(c=>h("div",{class:"it"+(c.n===val?" on":"")},
+  const box=open?h("div",{class:"catpop"},list.map(c=>h("div",{class:"it"+(c.n===val?" on":""),"data-n":c.n},
+      h("button",{class:"hd","aria-label":c.n+" 순서 옮기기 (끌거나 위·아래 화살표)",title:"끌어서 순서 바꾸기",onpointerdown:catDrag,onkeydown:e=>{const k=e.key==="ArrowUp"?-1:e.key==="ArrowDown"?1:0;if(!k)return;e.preventDefault();const ns=list.map(x=>x.n),i=ns.indexOf(c.n),j=i+k;if(j<0||j>=ns.length)return;ns.splice(j,0,ns.splice(i,1)[0]);const back=()=>{const b=[...document.querySelectorAll(".catpop .it")].find(r=>r.dataset.n===c.n);b&&b.querySelector(".hd").focus()};setTimeout(back,0);Promise.resolve(saveCatOrder(ns)).then(back)}},"≡"),
       h("button",{class:"st"+(c.fav?" full":""),"aria-label":c.fav?c.n+" 즐겨찾기 끄기":c.n+" 즐겨찾기",onclick:e=>{e.stopPropagation();favCat(c.n)}},c.fav?"★":"☆"),
       h("button",{class:"nm",onclick:()=>{close();pick(c.n===val?null:c.n)}},c.n))),
     h("input",{class:"in",placeholder:"+ 새 카테고리 이름, Enter","aria-label":"새 카테고리 이름",value:S.drafts["cat-new"]||"",oninput:e=>{S.drafts["cat-new"]=e.target.value},
@@ -1154,7 +1177,10 @@ function qHint(v){
     h("span",null,"Enter로 ",S.qmode==="event"?"캘린더에 추가":"추가")].filter(Boolean);
 }
 async function submitQuick(){
-  const id="q-main",v=(S.drafts[id]||"").trim();if(!v)return;
+  const id="q-main";let v=(S.drafts[id]||"").trim();
+  // desk: 제목을 비우고 세부 내역에만 적었으면 첫 줄을 제목으로 쓴다(그냥 멈추면 저장이 안 된 줄 모른다)
+  if(!v&&S.qmode==="task"){const d=(S.drafts["q-detail"]||"").trim();if(d){const ls=d.split("\n");v=ls.shift().trim();S.drafts["q-detail"]=ls.join("\n")}}
+  if(!v){toast(S.qmode==="task"?"업무 제목을 적어 주세요":"내용을 적어 주세요","bad");const q=$("#"+id);q&&q.focus();return}
   S.drafts[id]="";S.quick=false;
   if(S.qmode==="memo"){addMemo(v);return}
   const P=parseQuick(v);if(!P.t){toast("내용을 적어 주세요","bad");return}

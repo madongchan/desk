@@ -34,7 +34,7 @@ const KINDS = {
   doc: { file: '지원 서류.md', check: false, num: ['lim', 'o'], list: ['job'],
     keys: { job: '지원처', kind: '종류', st: '상태', lim: '글자 제한', o: '순서', body: '내용', memo: '메모', file: '파일' } },
   // 카테고리: 업무의 프로젝트 칸에서 고르는 이름 목록. fav가 true면 즐겨찾기라 단추로 바로 고른다
-  cat: { file: '카테고리.md', check: false, title: 'n', keys: { fav: '즐겨찾기' } },
+  cat: { file: '카테고리.md', check: false, title: 'n', num: ['o'], keys: { fav: '즐겨찾기', o: '순서' } },
 };
 const DONE = '완료', TODO = '시작 전';
 const MAX_TEXT = 20000;
