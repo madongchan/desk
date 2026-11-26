@@ -164,6 +164,13 @@ select.in{padding-right:24px}
 .quick input:focus{outline:0}
 .quick .plus{width:26px;height:26px;border-radius:50%;background:var(--blue);display:grid;place-items:center;color:#fff;flex:none}
 .quick .qd{margin:0 4px 0 42px;width:auto;font-size:13px;line-height:1.6;resize:vertical;min-height:52px}
+.qfoot{display:flex;align-items:flex-end;gap:10px;min-width:0}
+.qfoot .hint{flex:1;min-width:0}
+.qfoot .btn{flex:none;margin:0 2px 2px 0;min-height:32px;padding:0 16px}
+/* desk: 움직임 — 눌림, 지나감, 색 바뀜을 부드럽게. 움직임 줄이기 설정이면 아래 규칙이 모두 끈다 */
+button,.btn,.chip,.task,.kc,.in,.catpop .it,.seg button,.calf button{transition:background-color .2s cubic-bezier(.2,.8,.2,1),color .2s cubic-bezier(.2,.8,.2,1),border-color .2s cubic-bezier(.2,.8,.2,1),box-shadow .25s cubic-bezier(.2,.8,.2,1),opacity .2s ease,transform .16s cubic-bezier(.2,.8,.2,1)}
+button:not(:disabled):active,.chip:active{transform:scale(.96)}
+.catpop .hd:active{transform:none}
 .quick .hint{font-size:12px;color:var(--fg3);padding:0 4px 2px 42px;display:flex;gap:10px;flex-wrap:wrap;min-height:18px}
 .quick .hint b{color:var(--fg2);font-weight:500}
 
@@ -527,7 +534,7 @@ tr.cur td{background:rgba(91,122,153,.1)}
 /* 검사 창(오른쪽 시트) */
 .sheet{position:fixed;top:max(10px,env(safe-area-inset-top));right:max(10px,env(safe-area-inset-right));bottom:max(10px,env(safe-area-inset-bottom));width:min(400px,calc(100vw - 20px));z-index:30;
   background:rgba(44,44,46,.86);backdrop-filter:blur(40px) saturate(1.6);-webkit-backdrop-filter:blur(40px) saturate(1.6);border:.5px solid rgba(255,255,255,.16);
-  border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,.6);display:flex;flex-direction:column;animation:slide .2s ease}
+  border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,.6);display:flex;flex-direction:column}
 @keyframes slide{from{transform:translateX(16px);opacity:0}}
 .sheet header{display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:.5px solid var(--line)}
 .sheet header b{flex:1;font-size:13px;color:var(--fg2);font-weight:500}
@@ -540,12 +547,12 @@ tr.cur td{background:rgba(91,122,153,.1)}
 .chip{border:0;background:var(--fill);border-radius:20px;padding:4px 11px;font-size:12.5px}
 .chip:hover{background:var(--fill-2)}
 .chip[aria-pressed="true"]{background:#5b7a99;color:#fff}
-.catpop{flex-basis:100%;display:grid;gap:2px;max-width:300px;background:var(--card-2);border:.5px solid var(--line);border-radius:10px;padding:6px}
+.catpop{flex-basis:100%;position:relative;display:grid;gap:2px;max-width:300px;background:var(--card-2);border:.5px solid var(--line);border-radius:10px;padding:6px}
 .catpop .it{display:flex;align-items:center;gap:4px;border-radius:7px}
 .catpop .it.on,.catpop .it:hover{background:rgba(255,255,255,.06)}
 .catpop .hd{border:0;background:transparent;width:22px;padding:6px 0;color:var(--fg3);cursor:grab;touch-action:none;user-select:none;font-size:14px;line-height:1}
 .catpop .hd:active{cursor:grabbing}
-.catpop .it.drag{background:rgba(255,255,255,.1);box-shadow:0 4px 14px rgba(0,0,0,.35)}
+.catpop .it.drag{position:relative;z-index:2;background:rgba(60,60,66,.98);box-shadow:0 10px 28px rgba(0,0,0,.45)}
 .catpop .st{border:0;background:transparent;font-size:16px;width:28px;color:var(--fg3);cursor:pointer}
 .catpop .st.full{color:#c4ad7a}
 .catpop .nm{border:0;background:transparent;flex:1;text-align:left;padding:6px 4px;font-size:13px;color:var(--fg);cursor:pointer}
@@ -945,7 +952,7 @@ async function mutate(apply,call,okMsg){
 }
 const persist=()=>{if(!S.demo&&S.data)ls.set("desk:cache",S.data)};
 const byId=(arr,id)=>arr.find(x=>x.id===id);
-function replaceIn(arr,oldId,obj){const i=arr.findIndex(x=>x.id===oldId);if(i>=0)arr[i]=Object.assign(arr[i],obj);}
+function replaceIn(arr,oldId,obj){if(obj&&obj.id&&obj.id!==oldId)MALIAS[oldId]=obj.id;const i=arr.findIndex(x=>x.id===oldId);if(i>=0)arr[i]=Object.assign(arr[i],obj);}
 
 /* 할 일 */
 function updTask(id,fields,msg){
@@ -961,12 +968,23 @@ function addCat(n,fav){const tmp="tmp-c"+Date.now();
 // desk: 손잡이를 누른 채 위아래로 끌면 줄이 따라 옮겨지고, 놓을 때 순서를 저장한다. 끄는 동안은 화면을 다시 그리지 않고 줄만 옮긴다
 function catDrag(e){
   if(e.button>0)return;e.preventDefault();
-  const hd=e.currentTarget,row=hd.closest(".it"),pop=row.parentElement;row.classList.add("drag");
-  const move=ev=>{const rows=[...pop.querySelectorAll(".it")].filter(r=>r!==row),after=rows.find(r=>{const b=r.getBoundingClientRect();return ev.clientY<b.top+b.height/2});
-    if(after)pop.insertBefore(row,after);else{const last=rows[rows.length-1];if(last)last.after(row)}};
-  const up=()=>{removeEventListener("pointermove",move);removeEventListener("pointerup",up);removeEventListener("pointercancel",up);row.classList.remove("drag");
-    saveCatOrder([...pop.querySelectorAll(".it")].map(r=>r.dataset.n))};
+  const hd=e.currentTarget,row=hd.closest(".it"),pop=row.parentElement,y0=e.clientY,off0=row.offsetTop,ok=MOTION_OK();
+  row.classList.add("drag");
+  // 다른 줄을 옮길 때는 옮기기 전 위치를 재서 미끄러지게 한다
+  const slide=f=>{const others=[...pop.querySelectorAll(".it")].filter(r=>r!==row),b=new Map(others.map(r=>[r,r.offsetTop]));f();
+    if(ok)others.forEach(r=>{const d=b.get(r)-r.offsetTop;if(d)r.animate([{transform:`translateY(${d}px)`},{transform:"none"}],{duration:220,easing:EASE})})};
+  // 잡은 줄은 손을 따라온다(제자리에서 얼마나 떨어졌는지만큼 띄운다)
+  const follow=y=>{row.style.transform=`translateY(${(y-y0)-(row.offsetTop-off0)}px) scale(1.02)`};
+  const move=ev=>{const py=ev.clientY-pop.getBoundingClientRect().top+pop.scrollTop,others=[...pop.querySelectorAll(".it")].filter(r=>r!==row);
+    const after=others.find(r=>py<r.offsetTop+r.offsetHeight/2)||null,nx=row.nextElementSibling,cur=nx&&nx.classList.contains("it")?nx:null;
+    if(after!==cur)slide(()=>{if(after)pop.insertBefore(row,after);else others[others.length-1].after(row)});
+    follow(ev.clientY)};
+  follow(y0);
   // 줄을 옮기면 손잡이가 포인터를 놓치므로 창 전체에서 받는다
+  const up=()=>{removeEventListener("pointermove",move);removeEventListener("pointerup",up);removeEventListener("pointercancel",up);
+    const t=row.style.transform;row.style.transform="";row.classList.remove("drag");
+    if(ok&&t)row.animate([{transform:t},{transform:"none"}],{duration:240,easing:EASE}); // 놓으면 제자리로 내려앉는다
+    saveCatOrder([...pop.querySelectorAll(".it")].map(r=>r.dataset.n))};
   addEventListener("pointermove",move);addEventListener("pointerup",up);addEventListener("pointercancel",up);
 }
 // 순서가 바뀐 것만 고친다. 카테고리 노트에 없는 이름(업무에만 쓴 이름)은 노트에 새로 적는다
@@ -1129,7 +1147,9 @@ function quickAdd(){
     S.qmode==="task"?h("textarea",{class:"in qd",id:"q-detail",rows:"2","aria-label":"세부 내역",placeholder:"세부 내역 (선택) · 여러 줄로 적을 수 있습니다 · "+KEY.trim()+"+Enter로 저장",value:S.drafts["q-detail"]||"",
       oninput:e=>{S.drafts["q-detail"]=e.target.value},onkeydown:e=>{if(e.key==="Enter"&&(e.ctrlKey||e.metaKey)&&!e.isComposing){e.preventDefault();submitQuick()}}}):null,
     S.qmode==="memo"?null:quickPicks(),
-    h("div",{class:"hint",id:"q-hint"},qHint(v)));
+    // desk: Ctrl+Enter를 모르는 사람도 저장할 수 있게 버튼을 둔다
+    h("div",{class:"qfoot"},h("div",{class:"hint",id:"q-hint"},qHint(v)),
+      h("button",{class:"btn pri sm",onclick:submitQuick},S.qmode==="memo"?"메모 저장":S.qmode==="event"?"캘린더에 추가":"저장")));
 }
 // desk: 대시보드에서 날짜 없이 적은 할 일은 오늘로 넣는다. 다른 화면은 날짜 없음 그대로
 const quickDefaultDay=()=>S.view==="today"?TODAY():null;
@@ -1141,7 +1161,7 @@ function catList(){const D=S.data||{},out=(D.cats||[]).map(c=>({n:c.n,fav:!!c.fa
 function catPicker(key,val,pick){
   const list=catList(),open=S.catOpen===key,other=val&&!list.some(c=>c.fav&&c.n===val)?val:null,close=()=>{S.catOpen=null};
   const addNew=()=>{const n=(S.drafts["cat-new"]||"").trim();if(!n)return;S.drafts["cat-new"]="";close();if(!list.some(c=>c.n===n))addCat(n);pick(n)};
-  const box=open?h("div",{class:"catpop"},list.map(c=>h("div",{class:"it"+(c.n===val?" on":""),"data-n":c.n},
+  const box=open?h("div",{class:"catpop","data-k":"catpop"},list.map(c=>h("div",{class:"it"+(c.n===val?" on":""),"data-n":c.n},
       h("button",{class:"hd","aria-label":c.n+" 순서 옮기기 (끌거나 위·아래 화살표)",title:"끌어서 순서 바꾸기",onpointerdown:catDrag,onkeydown:e=>{const k=e.key==="ArrowUp"?-1:e.key==="ArrowDown"?1:0;if(!k)return;e.preventDefault();const ns=list.map(x=>x.n),i=ns.indexOf(c.n),j=i+k;if(j<0||j>=ns.length)return;ns.splice(j,0,ns.splice(i,1)[0]);const back=()=>{const b=[...document.querySelectorAll(".catpop .it")].find(r=>r.dataset.n===c.n);b&&b.querySelector(".hd").focus()};setTimeout(back,0);Promise.resolve(saveCatOrder(ns)).then(back)}},"≡"),
       h("button",{class:"st"+(c.fav?" full":""),"aria-label":c.fav?c.n+" 즐겨찾기 끄기":c.n+" 즐겨찾기",onclick:e=>{e.stopPropagation();favCat(c.n)}},c.fav?"★":"☆"),
       h("button",{class:"nm",onclick:()=>{close();pick(c.n===val?null:c.n)}},c.n))),
@@ -1336,7 +1356,7 @@ function sheetView(){
   const today=TODAY(),dd=dOf(t.d),tm=tOf(t.d)||"";
   const setDate=(d,time)=>updTask(t.id,{d:d?(time?`${d}T${time}:00+09:00`:d):null});
   const chips=(label,opts,val,on,colors,extra)=>h("div",{class:"field"},h("label",null,label),h("div",{class:"chips"},opts.map(o=>h("button",{class:"chip","aria-pressed":String(val===o),onclick:()=>on(val===o?null:o)},colors&&colors[o]?h("i",{style:`display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:5px;background:${colors[o]}`}):null,o)),extra));
-  return h("aside",{class:"sheet","aria-label":"업무 자세히"},
+  return h("aside",{class:"sheet","data-k":"sheet","aria-label":"업무 자세히"},
     h("header",null,h("b",null,isDec(t)?"결정할 일":"업무"),t.u?h("a",{class:"btn ghost sm",href:t.u,target:"_blank",rel:"noopener"},"옵시디언에서 열기",ic("ext")):null,h("button",{class:"icon-btn","aria-label":"닫기",onclick:closeSheet},ic("x"))),
     h("div",{class:"bd"},
       h("div",{class:"row",style:"align-items:flex-start;flex-wrap:nowrap"},h("button",{class:"ck"+(isDone(t)?" on":""),html:CHECK,style:"margin-top:4px","aria-label":"완료",onclick:e=>toggleTask(t,e.currentTarget)}),
@@ -1378,7 +1398,7 @@ function paletteItems(q){
 function paletteView(){
   if(!S.palette)return null;const items=paletteItems(S.palette.q);S.palette.i=Math.min(S.palette.i,Math.max(0,items.length-1));
   const run=it=>{S.palette=null;it.fn();render()};
-  return h("div",{class:"veil",onclick:e=>{if(e.target===e.currentTarget){S.palette=null;render()}}},h("div",{class:"palette",role:"dialog","aria-label":"검색"},
+  return h("div",{class:"veil","data-k":"veil",onclick:e=>{if(e.target===e.currentTarget){S.palette=null;render()}}},h("div",{class:"palette",role:"dialog","aria-label":"검색"},
     h("input",{id:"pal-in",value:S.palette.q,placeholder:"업무·메모·개인 일정 검색 또는 명령",autocomplete:"off",oninput:e=>{S.palette.q=e.target.value;S.palette.i=0;drawList()},
       onkeydown:e=>{const its=paletteItems(S.palette.q);if(e.key==="ArrowDown"){e.preventDefault();S.palette.i=Math.min(S.palette.i+1,its.length-1);drawList()}else if(e.key==="ArrowUp"){e.preventDefault();S.palette.i=Math.max(0,S.palette.i-1);drawList()}else if(e.key==="Enter"&&!e.isComposing&&its[S.palette.i]){run(its[S.palette.i])}}}),
     listEl(items)));
@@ -1394,7 +1414,7 @@ S.month=0;S.mAdd=null;S.dayPop=null;
 function dayModal(){
   const day=S.dayPop;if(!day||!S.data)return null;
   const close=()=>{S.dayPop=null;render()},evs=calEvs(day),ts=calTasks(day).sort((a,b)=>(isDone(a)-isDone(b))||((a.r==="상")?-1:1));
-  return h("div",{class:"veil",onclick:e=>{if(e.target===e.currentTarget)close()}},h("div",{class:"diag daypop",role:"dialog","aria-label":`${fmtMD(day)} 세부 보기`},
+  return h("div",{class:"veil","data-k":"veil",onclick:e=>{if(e.target===e.currentTarget)close()}},h("div",{class:"diag daypop",role:"dialog","aria-label":`${fmtMD(day)} 세부 보기`},
     h("div",{class:"row"},h("h3",{style:"flex:1"},`${fmtMD(day)} · ${evs.length+ts.length}개`),h("button",{class:"icon-btn","aria-label":"닫기",onclick:close},ic("x"))),
     h("div",{class:"dlist"},
       evs.map(e=>h("div",{class:"dr ev k-"+e.k},h("b",null,e.t),h("span",null,[e.all?"종일":tOf(e.s),e.cal,e.loc].filter(Boolean).join(" · ")))),
@@ -1461,7 +1481,7 @@ async function diagnose(){
 }
 function diagView(){
   if(!S.diag)return null;
-  return h("div",{class:"veil",onclick:e=>{if(e.target===e.currentTarget){S.diag=null;render()}}},h("div",{class:"diag",role:"dialog","aria-label":"연결 원인 확인"},
+  return h("div",{class:"veil","data-k":"veil",onclick:e=>{if(e.target===e.currentTarget){S.diag=null;render()}}},h("div",{class:"diag",role:"dialog","aria-label":"연결 원인 확인"},
     h("h3",null,"연결 원인 확인"),
     S.diag.map(d=>h("div",{class:"r"},h("b",null,d.n),h("span",null,d.st),h("span",{class:"faint num"},d.ms?d.ms+"ms":""))),
     h("ol",null,
@@ -1479,7 +1499,7 @@ function openQuick(mode){
 }
 function quickModal(){
   if(!S.quick)return null;
-  return h("div",{class:"veil",onclick:e=>{if(e.target===e.currentTarget){S.quick=false;render()}}},h("div",{class:"qmodal"},quickAdd(),
+  return h("div",{class:"veil","data-k":"veil",onclick:e=>{if(e.target===e.currentTarget){S.quick=false;render()}}},h("div",{class:"qmodal"},quickAdd(),
     h("div",{class:"faint",style:"font-size:11.5px;padding:2px 8px"},"Enter 저장 · Esc 닫기 · 빈칸에서 Tab 누르면 업무 → 메모 → 개인 일정(캘린더)")));
 }
 
@@ -2167,7 +2187,7 @@ function jobSheet(){
   const j=byId(S.data.jobs,S.sel.id);if(!j){S.sel=null;return null}
   const up=(f,msg)=>mutate(D=>Object.assign(byId(D.jobs,j.id),f),()=>api("update",{kind:"job",id:j.id,fields:f}),msg);
   const fld=(label,id,key,attrs)=>h("div",{class:"field"},h("label",null,label),h(attrs&&attrs.rows?"textarea":"input",Object.assign({class:"in",id,value:(key==="d"?dOf(j[key]):j[key])||"",onchange:e=>up({[key]:e.target.value||null},"저장했습니다")},attrs||{})));
-  return h("aside",{class:"sheet","aria-label":"지원처 자세히"},
+  return h("aside",{class:"sheet","data-k":"sheet","aria-label":"지원처 자세히"},
     h("header",null,h("b",null,"커리어"),j.u?h("a",{class:"btn ghost sm",href:j.u,target:"_blank",rel:"noopener"},"옵시디언에서 열기",ic("ext")):null,h("button",{class:"icon-btn","aria-label":"닫기",onclick:closeSheet},ic("x"))),
     h("div",{class:"bd"},h("textarea",{class:"title",id:"js-n",rows:"1",value:j.n||"",onchange:e=>up({n:e.target.value},"저장했습니다")}),
       h("div",{class:"field"},h("label",null,"단계"),h("div",{class:"chips"},STAGES.map(s=>h("button",{class:"chip","aria-pressed":String(j.st===s),onclick:()=>up({st:s})},h("i",{style:`display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:5px;background:${SCOL[s]}`}),s)))),
@@ -2268,7 +2288,7 @@ function mailRow(m,src){
 }
 function mailSheet(){
   const src=S.sel.src,box=mailBox(src)||{},m=byId(box.mail||[],S.sel.id),b=S.mailBody[S.sel.id];
-  return h("aside",{class:"sheet","aria-label":"메일"},h("header",null,h("b",null,"메일"),
+  return h("aside",{class:"sheet","data-k":"sheet","aria-label":"메일"},h("header",null,h("b",null,"메일"),
       h("a",{class:"btn ghost sm",href:gmailUrl(box.account,S.sel.id),target:"_blank",rel:"noopener"},"Gmail에서 답장",ic("ext")),h("button",{class:"icon-btn","aria-label":"닫기",onclick:closeSheet},ic("x"))),
     h("div",{class:"bd"},m?h("textarea",{class:"title",rows:"2",readonly:true,value:m.subj}):null,
       b==="loading"||!b?h("div",{class:"empty"},"본문을 불러오는 중…"):b.error?h("div",{class:"banner"},b.error):
@@ -2414,10 +2434,39 @@ function lock(){ls.del("desk:cfg");ls.del("desk:cache");S.cfg=null;S.data=null;S
 /* ═════════ 전체 그리기 ═════════ */
 function navCounts(){if(!S.data)return{};const today=TODAY(),open=S.data.tasks.filter(t=>!isDone(t));
   return{today:open.filter(t=>t.d&&dOf(t.d)<=today).length,work:open.length,life:(S.data.habits||[]).filter(x=>x.on!==false&&!hDates(x).includes(today)).length||"",pf:S.data.tasks.filter(t=>t.star).length||"",job:(S.data.jobs||[]).filter(j=>!["합격","불합격","보류"].includes(j.st)).length||""}}
+/* ═════════ desk: 움직임 — 화면을 통째로 다시 그려도 위치가 이어지게 한다(FLIP: 처음과 끝 위치를 재서 그 사이를 움직임으로 메운다) ═════════ */
+const MOTION_OK=()=>!matchMedia("(prefers-reduced-motion: reduce)").matches;
+const EASE="cubic-bezier(.2,.8,.2,1)";
+const MALIAS={}; // 저장 전 임시 번호 → 서버가 준 번호. 같은 업무로 알아보게
+const MSEL="[data-k],[data-id],.catpop .it[data-n]";
+const mkey=el=>el.dataset.k||(el.dataset.id?"t:"+(MALIAS[el.dataset.id]||el.dataset.id):el.dataset.n?"c:"+el.dataset.n:null);
+function motionMap(){const m=new Map(),cnt={};document.querySelectorAll(MSEL).forEach(el=>{const k=mkey(el);if(!k)return;const i=cnt[k]=(cnt[k]||0)+1;m.set(k+"#"+i,el)});return m}
+function motionSnap(){const m=new Map();if(!MOTION_OK())return m;motionMap().forEach((el,k)=>{const r=el.getBoundingClientRect();if(r.width||r.height)m.set(k,{el,r})});m.view=S.view;return m}
+function motionPlay(snap){
+  if(!MOTION_OK()||!snap.size||snap.view!==S.view)return; // 처음 그릴 때와 화면을 바꿀 때는 움직이지 않는다
+  const now=motionMap(),moved=new Set();let budget=80;
+  now.forEach((el,k)=>{
+    const r=el.getBoundingClientRect();if(!r.width&&!r.height)return;const old=snap.get(k),sheet=el.dataset.k==="sheet",veil=el.dataset.k==="veil";
+    if(old){const dx=old.r.left-r.left,dy=old.r.top-r.top;if(Math.abs(dx)<1&&Math.abs(dy)<1)return;
+      const par=el.parentElement&&el.parentElement.closest(MSEL);if(par&&moved.has(par))return; // 감싼 것이 이미 움직이면 따로 움직이지 않는다
+      if(--budget<0)return;moved.add(el);el.animate([{transform:`translate(${dx}px,${dy}px)`},{transform:"none"}],{duration:340,easing:EASE});return}
+    if(--budget<0)return;
+    el.animate(veil?[{opacity:0},{opacity:1}]:sheet?[{transform:"translateX(28px)",opacity:0},{transform:"none",opacity:1}]:[{transform:"translateY(6px) scale(.985)",opacity:0},{transform:"none",opacity:1}],{duration:sheet?300:veil?180:260,easing:EASE});
+    if(veil&&el.firstElementChild)el.firstElementChild.animate([{transform:"translateY(-8px) scale(.98)",opacity:0},{transform:"none",opacity:1}],{duration:280,easing:EASE});
+  });
+  let gone=0;
+  snap.forEach((o,k)=>{if(now.has(k)||gone>=12||!/^(t:|sheet|veil|catpop)/.test(k))return;gone++;
+    const c=o.el.cloneNode(true),sheet=o.el.dataset.k==="sheet";
+    Object.assign(c.style,{position:"fixed",left:o.r.left+"px",top:o.r.top+"px",width:o.r.width+"px",height:o.r.height+"px",margin:"0",pointerEvents:"none",zIndex:"60",boxSizing:"border-box"});
+    document.body.appendChild(c);
+    c.animate(sheet?[{opacity:1},{transform:"translateX(28px)",opacity:0}]:[{opacity:1},{transform:"scale(.97)",opacity:0}],{duration:200,easing:"cubic-bezier(.4,0,1,1)",fill:"forwards"}).finished.then(()=>c.remove(),()=>c.remove());
+  });
+}
 function render(){
   const ae=document.activeElement,aeId=ae&&ae.id,selS=ae&&ae.selectionStart,selE=ae&&ae.selectionEnd;
   const layer=$("#layer");
   if(!S.data){$("#app").hidden=true;fill(layer,setupView());restore();return}
+  const snap=motionSnap();
   // desk: 뺀 화면(일상, 도구 등)으로 가는 버튼이 원본 곳곳에 남아 있다. 어디서 오든 남긴 화면으로 돌린다
   if(!VIEWS.some(v=>v[0]===S.view))S.view="today";
   if(S.view!=="att"&&S.pay.open)S.pay={open:false,rows:null,busy:false};
@@ -2442,7 +2491,7 @@ function render(){
   let content;try{content=(views[S.view]||viewToday)()}catch(e){console.error(e);content=h("div",{class:"banner"},"이 화면을 그리는 중 문제가 생겼습니다: "+e.message)}
   fill($("#page"),...[connBanner(),S.demo?h("div",{class:"banner"},"지금은 예시 데이터입니다. 실제 옵시디언과 연결하려면 ",h("button",{class:"btn sm",onclick:lock},"연결하기"),"를 누르세요."):null,...[].concat(content)].filter(Boolean));
   fill(layer,...[withGrip(sheetView()),dayModal(),paletteView(),quickModal(),diagView()].filter(Boolean));
-  renderSync();restore();
+  renderSync();restore();motionPlay(snap);
   function restore(){if(!aeId)return;const el=document.getElementById(aeId);if(el&&el!==document.activeElement){el.focus();try{if(selS!=null)el.setSelectionRange(selS,selE)}catch{}}}
 }
 function renderSync(){
