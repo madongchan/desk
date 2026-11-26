@@ -279,6 +279,18 @@ button:not(:disabled):active,.chip:active{transform:scale(.96)}
 .hgrid .hd.t{color:#8fa9c4;font-weight:700}
 .hcell{width:100%;aspect-ratio:1;max-width:30px;justify-self:center;border-radius:8px;border:0;background:var(--fill);padding:0}
 .hcell.on{background:var(--green)}
+.hbbtns{display:flex;gap:6px;align-items:center}
+.hbset{display:grid;gap:6px;margin-top:12px;padding-top:12px;border-top:.5px solid var(--line)}
+.hbrow{display:flex;gap:6px;align-items:center}
+.hbrow.off{opacity:.55}
+.hbrow .ic{width:46px;flex:none;text-align:center}
+.hbrow .hbn{flex:1}
+.hbrow select{flex:none}
+.hbrow .sw{display:flex;gap:4px;align-items:center;font-size:12px;color:var(--fg2);flex:none;white-space:nowrap;cursor:pointer}
+.hbrow .del{flex:none;border:0;background:transparent;color:var(--fg3);font-size:15px;min-width:28px;padding:4px 8px;border-radius:6px;cursor:pointer;white-space:nowrap}
+.hbrow .del:hover{color:#d98c84;background:rgba(217,140,132,.12)}
+.hbrow .del.armed{color:#fff;background:#b5534a;font-size:12px}
+@media (max-width:520px){.hbrow{flex-wrap:wrap}.hbrow .hbn{flex-basis:calc(100% - 52px)}}
 .hgrid .nm{display:flex;gap:6px;align-items:center;min-width:0}
 .hgrid .nm span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .hgrid .st{font-size:11.5px;color:var(--fg2);text-align:right}
@@ -1535,23 +1547,56 @@ function toggleHabit(hb,day){
   return mutate(D=>{const x=byId(D.habits,hb.id),s=new Set(hDates(x));s.has(day)?s.delete(day):s.add(day);x.dates=[...s].sort().join(",")},
     async()=>{const r=await api("habitToggle",{id:hb.id,date:day});replaceIn(S.data.habits,hb.id,r)});
 }
+// desk: 습관 설정. 카드의 「설정」 단추로 열고 닫는다. 추가, 이름·아이콘·주간 목표·사용 고치기, 지우기(두 번 눌러 확인)
+let hbDelT=null;
+function hbSave(x,f){
+  if(String(x.id).startsWith("tmp")){toast("아직 저장 중입니다. 잠시 뒤 다시 고쳐 주세요");render();return}
+  return mutate(D=>{Object.assign(byId(D.habits,x.id),f)},()=>api("update",{kind:"habit",id:x.id,fields:f}));
+}
+function hbDel(x){const tmp=String(x.id).startsWith("tmp");
+  return mutate(D=>{D.habits=D.habits.filter(y=>y.id!==x.id)},async()=>{if(!tmp)await api("trash",{kind:"habit",id:x.id})},"「"+x.n+"」 습관을 지웠습니다");
+}
+function hbAdd(){
+  const n=(S.drafts["h-name"]||"").trim();
+  if(!n){toast("습관 이름을 적어 주세요","bad");const q=$("#h-name");q&&q.focus();return}
+  const f={n,i:(S.drafts["h-icon"]||"").trim()||"✓",g:+(S.drafts["h-goal"]||7),o:(S.data.habits||[]).length+1,on:true,dates:""};
+  S.drafts["h-name"]=S.drafts["h-icon"]=S.drafts["h-goal"]="";
+  const tmp="tmp-h"+Date.now();
+  mutate(D=>{D.habits=D.habits||[];D.habits.push(Object.assign({id:tmp},f))},async()=>{const r=await api("add",{kind:"habit",fields:f});replaceIn(S.data.habits,tmp,r)},"습관을 추가했습니다");
+}
+const goalSel=(val,attrs)=>h("select",Object.assign({class:"in"},attrs),[1,2,3,4,5,6,7].map(n=>h("option",{value:n,selected:+val===n?"selected":null},n===7?"매일":"주 "+n+"번")));
+const hbToggle=()=>h("button",{class:"btn ghost sm","aria-expanded":String(!!S.hbOpen),onclick:()=>{S.hbOpen=!S.hbOpen;S.hbDel=null;render()}},S.hbOpen?"설정 닫기":"설정");
+function habitSettings(){
+  if(!S.hbOpen)return null;
+  return h("div",{class:"hbset","data-k":"hbset"},
+    (S.data.habits||[]).map(x=>{const arm=S.hbDel===x.id;
+      return h("div",{class:"hbrow"+(x.on===false?" off":""),"data-k":"hb:"+x.id},
+        h("input",{class:"in ic",value:x.i||"",placeholder:"✓","aria-label":x.n+" 아이콘",onchange:e=>hbSave(x,{i:e.target.value.trim()||"✓"})}),
+        h("input",{class:"in hbn",value:x.n,"aria-label":x.n+" 이름",onchange:e=>{const v=e.target.value.trim();if(v&&v!==x.n)hbSave(x,{n:v});else e.target.value=x.n}}),
+        goalSel(x.g||7,{"aria-label":x.n+" 주간 목표",onchange:e=>hbSave(x,{g:+e.target.value})}),
+        h("label",{class:"sw",title:"끄면 오늘의 습관에서 숨긴다"},h("input",{type:"checkbox",checked:x.on!==false,onchange:e=>hbSave(x,{on:e.target.checked})}),"사용"),
+        h("button",{class:"del"+(arm?" armed":""),"aria-label":arm?x.n+" 지우기 확인":x.n+" 지우기",title:arm?"한 번 더 누르면 지웁니다":"습관 지우기",
+          onclick:()=>{if(arm){S.hbDel=null;hbDel(x);return}S.hbDel=x.id;render();clearTimeout(hbDelT);hbDelT=setTimeout(()=>{if(S.hbDel===x.id){S.hbDel=null;render()}},3000)}},arm?"지우기":"×"))}),
+    h("div",{class:"hbrow"},draftIn("h-icon",{class:"in ic",placeholder:"🙂","aria-label":"새 습관 아이콘"}),
+      draftIn("h-name",{class:"in hbn",placeholder:"새 습관 이름, Enter","aria-label":"새 습관 이름",onkeydown:e=>{if(!e.isComposing&&e.key==="Enter"){e.preventDefault();hbAdd()}}}),
+      goalSel(S.drafts["h-goal"]||7,{"aria-label":"새 습관 주간 목표",onchange:e=>{S.drafts["h-goal"]=e.target.value}}),
+      h("button",{class:"btn pri sm",onclick:hbAdd},"추가")));
+}
 function habitsCard(compact){
   const today=TODAY(),hs=(S.data.habits||[]).filter(x=>x.on!==false);
   const doneN=hs.filter(x=>hDates(x).includes(today)).length;
-  if(compact)return card("오늘의 습관",{icon:"life",count:`${doneN}/${hs.length}`,right:h("button",{class:"btn ghost sm",onclick:()=>{S.view="life";render()}},"자세히")},
+  if(compact)return card("오늘의 습관",{icon:"life",count:`${doneN}/${hs.length}`,right:h("span",{class:"hbbtns"},hbToggle(),h("button",{class:"btn ghost sm",onclick:()=>{S.view="life";render()}},"자세히"))},
     hs.length?h("div",{class:"habits"},hs.map(x=>{const on=hDates(x).includes(today),st=streak(hDates(x));
-      return h("button",{class:"hb"+(on?" on":""),"aria-pressed":String(on),onclick:()=>toggleHabit(x,today)},h("span",{class:"ic"},x.i||"✓"),h("b",null,x.n),h("span",null,on?"완료 ✓":st?`${st}일 연속`:"오늘 체크하기"))})):h("div",{class:"empty"},"일상 탭에서 습관을 추가해 보세요"));
+      return h("button",{class:"hb"+(on?" on":""),"aria-pressed":String(on),onclick:()=>toggleHabit(x,today)},h("span",{class:"ic"},x.i||"✓"),h("b",null,x.n),h("span",null,on?"완료 ✓":st?`${st}일 연속`:"오늘 체크하기"))})):h("div",{class:"empty"},"「설정」을 눌러 습관을 추가해 보세요"),
+    habitSettings());
   const mon=monOf(today),days=[...Array(7)].map((_,i)=>addD(mon,i));
-  return card("습관",{icon:"life",count:"이번 주",right:h("span",{class:"faint",style:"font-size:11.5px"},"칸을 누르면 체크")},
+  return card("습관",{icon:"life",count:"이번 주",right:h("span",{class:"hbbtns"},h("span",{class:"faint",style:"font-size:11.5px"},"칸을 누르면 체크"),hbToggle())},
     h("div",{class:"hgrid"},h("span"),days.map(d=>h("span",{class:"hd"+(d===today?" t":"")},WD[pD(d).getDay()])),h("span",{class:"hd",style:"text-align:right"},"주간"),
       hs.map(x=>{const ds=hDates(x),n=days.filter(d=>ds.includes(d)).length;
         return [h("div",{class:"nm"},h("span",null,x.i||"✓"),h("span",null,x.n),h("button",{class:"icon-btn",style:"width:22px;height:22px;margin-left:auto","aria-label":x.n+" 숨기기",title:"숨기기",onclick:()=>mutate(D=>{byId(D.habits,x.id).on=false},()=>api("update",{kind:"habit",id:x.id,fields:{on:false}}),"습관을 숨겼습니다(옵시디언에서 「사용」 체크로 복구)")},ic("x"))),
           days.map(d=>h("button",{class:"hcell"+(ds.includes(d)?" on":""),disabled:d>today?"disabled":null,style:d>today?"opacity:.35":"","aria-label":`${x.n} ${fmtMD(d)}`,"aria-pressed":String(ds.includes(d)),onclick:()=>toggleHabit(x,d)})),
           h("span",{class:"st"},`${n}/${x.g||7}`,h("br"),h("span",{class:"faint"},`${streak(ds)}일 연속`))]})),
-    h("div",{class:"row"},draftIn("h-icon",{placeholder:"🙂",style:"width:52px","aria-label":"아이콘"}),draftIn("h-name",{placeholder:"새 습관 이름",class:"in grow","aria-label":"새 습관"}),
-      draftIn("h-goal",{placeholder:"주 몇 번",type:"number",min:"1",max:"7",style:"width:90px","aria-label":"주간 목표"}),
-      h("button",{class:"btn",onclick:()=>{const n=(S.drafts["h-name"]||"").trim();if(!n)return;const f={n,i:S.drafts["h-icon"]||"✓",g:+(S.drafts["h-goal"]||7),o:hs.length+1,on:true,dates:""};S.drafts["h-name"]=S.drafts["h-icon"]=S.drafts["h-goal"]="";
-        const tmp="tmp-h"+Date.now();mutate(D=>D.habits.push(Object.assign({id:tmp},f)),async()=>{const r=await api("add",{kind:"habit",fields:f});replaceIn(S.data.habits,tmp,r)},"습관을 추가했습니다")}},"추가")));
+    habitSettings());
 }
 
 function viewLife(){
