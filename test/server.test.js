@@ -250,6 +250,10 @@ assert.match(post('add', { kind: 'cat', fields: { n: '이상한', color: 'x' } }
 post('update', { kind: 'cat', id: r.data.id, fields: { o: 2 } });
 assert.deepStrictEqual(post('load', {}).data.cats.map(c => [c.n, c.o]), [['공부', 2]]);
 assert.match(text('카테고리.md'), / {4}순서:: 2\n/);
+// 카테고리 지우기: 노트에서 빼서 휴지통으로 옮긴다
+assert.strictEqual(post('trash', { kind: 'cat', id: r.data.id }).ok, true);
+assert.deepStrictEqual(post('load', {}).data.cats, []);
+assert.match(text('휴지통.md'), /카테고리\.md에서 지움 %%\n- \[ \] 공부 \^/);
 // 지메일: 받은편지함 목록은 읽기에 딸려 오고, 본문과 처리와 공고 검색은 따로 요청한다
 r = post('load', {});
 assert.deepStrictEqual(r.data.mail.map(m => [m.id, m.subj, m.from, m.unread, m.n]), [['t1', '채용 공고 안내', '어느 회사', true, 1], ['t2', '(제목 없음)', 'f@example.com', false, 1]]);
