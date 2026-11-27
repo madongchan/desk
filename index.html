@@ -2375,7 +2375,7 @@ function mailSheet(){
 
 /* ═════════ desk: 작업 — 볼트의 작업 노트를 프로젝트별로 보고, 넣어 둔 다이어그램과 캡처를 함께 본다. 읽기만 한다 ═════════ */
 // 노트 내용은 평소 읽기에 들어 있지 않다. 이 화면을 열 때 받아 와 여기에만 들고, 기기에 저장하지 않는다
-const libNew=()=>({idx:null,busy:false,err:null,p:"",s:"",q:"",stage:"",n:60,open:null,text:{},img:{},noteBusy:false,pk:"",pq:"",pn:24,pic:null});
+const libNew=()=>({idx:null,busy:false,err:null,p:"",s:"",q:"",stage:"",n:60,open:null,text:{},noteBusy:false,pk:"",pq:"",pn:24,pic:null});
 S.lib=libNew();
 function libLoad(force){const L=S.lib;if(L.busy||((L.idx||L.err)&&!force))return;L.busy=true;L.err=null;
   api("works",{}).then(r=>{L.idx=r}).catch(e=>{L.err=e.message}).finally(()=>{L.busy=false;if(S.view==="lib"||S.view==="pics")render()})}
@@ -2469,33 +2469,47 @@ function libMd(body,o){
     para.push(t);i++}
   flush();return out;
 }
-// 그림은 세 장씩 받아 온다(한 장에 4초쯤 걸린다). 받은 것은 화면을 다시 그리지 않고 그 자리만 바꾼다
-const libQ=[];let libBusy=0;
+// desk: 그림 받기. 화면에 보이는 칸(과 그 아래 조금)만 위에서부터 받는다. 여섯 장을 한 요청에 묶어 네 요청을 동시에 보낸다.
+// 받은 그림은 메모리(60MB까지)와 이 기기의 브라우저 캐시에 둔다. 캐시는 그림을 고친 시각이 같을 때만 다시 쓰고, 잠그기(자물쇠)로 지운다.
+// 받은 것은 화면을 다시 그리지 않고 그 자리만 바꾼다. 실패한 그림은 기억하지 않아 다음에 다시 받는다
+const IMGC=new Map(),imgQ=[],imgWait=new Set(),IMG_CACHE="desk-img";let imgcSize=0,imgBusy=0;
+const imgM=p=>((S.lib.idx&&S.lib.idx.imgM)||{})[p];
+const imgKey=p=>"https://desk.local/img/"+encodeURIComponent(p)+"?m="+imgM(p);
+function imgPut(p,v){if(IMGC.has(p)){imgcSize-=IMGC.get(p).length;IMGC.delete(p)}IMGC.set(p,v);imgcSize+=v.length;
+  for(const [k,x] of IMGC){if(imgcSize<=60e6)break;IMGC.delete(k);imgcSize-=x.length}} // ponytail: 먼저 넣은 것부터 버린다. 자주 보는 것을 앞으로 올리지는 않는다
+function imgDone(p,v){imgWait.delete(p);if(!v.startsWith("err:"))imgPut(p,v);
+  document.querySelectorAll("[data-img]").forEach(el=>{if(el.dataset.img===p)el.replaceWith(imgNode(p,v))})}
+const imgObs="IntersectionObserver" in window?new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){imgObs.unobserve(e.target);imgWant(e.target.dataset.img)}}),{rootMargin:"800px 0px"}):null;
+async function imgWant(p){
+  if(IMGC.has(p)||imgWait.has(p))return;imgWait.add(p);
+  if(imgM(p)&&window.caches)try{const r=await (await caches.open(IMG_CACHE)).match(imgKey(p));if(r){imgDone(p,await r.text());return}}catch{} // 캐시를 못 쓰면(사생활 보호 창 등) 그냥 받는다
+  imgQ.push(p);if(!imgPumpT)imgPumpT=setTimeout(()=>{imgPumpT=0;imgPump()})} // 같은 순간 보인 칸을 다 모은 뒤 묶어 보낸다
+let imgPumpT=0;
+function imgPump(){
+  while(imgBusy<4&&imgQ.length){const batch=imgQ.splice(0,6);imgBusy++;
+    api("workImgs",{paths:batch}).then(r=>batch.forEach(p=>{const x=((r&&r.imgs)||{})[p]||{err:"받지 못했습니다"};
+        if(!x.b64){imgDone(p,"err:"+x.err);return}
+        const v="data:"+x.mime+";base64,"+x.b64;imgDone(p,v);
+        if(imgM(p)&&window.caches)caches.open(IMG_CACHE).then(c=>c.put(imgKey(p),new Response(v))).catch(()=>{})}))
+      .catch(e=>batch.forEach(p=>imgDone(p,"err:"+e.message)))
+      .finally(()=>{imgBusy--;imgPump()})}}
+function imgNode(p,v){v=v||IMGC.get(p);const nm=p.split("/").pop();
+  return v.startsWith("err:")?h("div",{class:"faint",style:"font-size:12px"},"그림을 읽지 못했습니다: "+nm+" ("+v.slice(4)+")"):h("img",{class:"mdi",src:v,alt:nm,decoding:"async"})}
+function imgEl(p,label){
+  if(IMGC.has(p))return imgNode(p);
+  const el=h("div",{class:"mdi wait","data-img":p},label||"불러오는 중…");
+  if(imgObs)queueMicrotask(()=>{if(el.isConnected)imgObs.observe(el)});else imgWant(p);
+  return el}
 function libImgEl(name,o){
   const key=name.trim().split("/").pop().toLowerCase(),p=o.imgs.find(x=>x.split("/").pop().toLowerCase()===key);
   if(!p)return h("div",{class:"faint",style:"font-size:12px"},"(목록에 없는 그림: "+name+")");
-  if(S.lib.img[p])return libImgNode(p);
-  if(S.lib.img[p]==null&&!libQ.includes(p)){libQ.push(p);libPump()}
-  return h("div",{class:"mdi wait","data-img":p},"그림을 불러오는 중… "+name);
-}
-function libImgNode(p){const v=S.lib.img[p],nm=p.split("/").pop();
-  return v.startsWith("err:")?h("div",{class:"faint",style:"font-size:12px"},"그림을 읽지 못했습니다: "+nm+" ("+v.slice(4)+")"):h("img",{class:"mdi",src:v,alt:nm})}
-function libPump(){
-  if(libBusy>=3||!libQ.length)return;libBusy++;const p=libQ.shift(),L=S.lib;
-  L.img[p]=""; // 받는 중 표시. 같은 그림을 두 번 청하지 않는다
-  api("workImg",{path:p}).then(r=>{L.img[p]="data:"+r.mime+";base64,"+r.b64}).catch(e=>{L.img[p]="err:"+e.message})
-    .finally(()=>{libBusy--;if(S.lib===L)document.querySelectorAll("[data-img]").forEach(el=>{if(el.dataset.img===p)el.replaceWith(libImgNode(p))});libPump()}); // 그사이 화면을 떠났으면(S.lib가 새것) 버린다
-}
+  return imgEl(p,"그림을 불러오는 중… "+name)}
 
 /* ═════════ desk: 그림 — 볼트의 SVG와 캡처를 파일 이름·폴더·쓰는 노트로 찾아 본다. 작업 화면과 받아 둔 목록·그림을 같이 쓴다 ═════════ */
 // 그림 목록 = PC가 훑은 그림 전부(노트에 안 넣은 것까지) + 노트가 쓰는 그림. 그림마다 쓰는 노트를 붙인다
 function picList(){const use={};S.lib.idx.notes.forEach(n=>(n.imgs||[]).forEach(p=>(use[p]=use[p]||[]).push(n)));
   return {all:[...new Set([...(S.lib.idx.imgs||[]),...Object.keys(use)])].sort(),use}}
 const picName=p=>p.split("/").pop(),picDir=p=>p.split("/").slice(0,-1).join("/").replace(/^entities\//,"");
-function picThumb(p){const L=S.lib;
-  if(L.img[p])return libImgNode(p);
-  if(L.img[p]==null&&!libQ.includes(p)){libQ.push(p);libPump()}
-  return h("div",{class:"mdi wait","data-img":p},"불러오는 중…")}
 function viewPics(){
   libLoad();const L=S.lib;
   if(L.err)return [h("div",{class:"banner"},"그림 목록을 읽지 못했습니다: "+L.err," ",h("button",{class:"btn sm",onclick:()=>libLoad(true)},"다시 시도"))];
@@ -2505,15 +2519,15 @@ function viewPics(){
   const q=L.pq.trim().toLowerCase(),kind=p=>isCap(p)?"cap":"svg",nSvg=all.filter(p=>!isCap(p)).length;
   const list=all.filter(p=>(!L.pk||kind(p)===L.pk)&&(!q||(p+" "+(use[p]||[]).map(n=>n.t).join(" ")).toLowerCase().includes(q)));
   // 조건이 바뀌면 아직 받기 시작하지 않은 그림은 대기열에서 뺀다(보이지 않을 그림을 받느라 기다리지 않게)
-  const set=o=>{Object.assign(L,o,{pn:24});libQ.length=0;render()};
+  const set=o=>{Object.assign(L,o,{pn:24});render()};
   const bar=h("div",{class:"row"},
     h("div",{class:"seg",role:"group","aria-label":"그림 종류"},[["","전체",all.length],["svg","SVG",nSvg],["cap","캡처",all.length-nSvg]].map(([k,nm,c])=>h("button",{"aria-pressed":String(L.pk===k),onclick:()=>set({pk:k})},nm+" "+c))),
     h("input",{class:"in grow",id:"pic-q",type:"search",placeholder:"그림 검색 (파일 이름·폴더·쓰는 노트)",value:L.pq,style:"max-width:320px","aria-label":"그림 검색",
-      oninput:e=>{L.pq=e.target.value;L.pn=24;libQ.length=0;clearTimeout(wqT);wqT=setTimeout(render,250)}}),
+      oninput:e=>{L.pq=e.target.value;L.pn=24;clearTimeout(wqT);wqT=setTimeout(render,250)}}),
     (L.pq||L.pk)?h("button",{class:"btn ghost",onclick:()=>set({pk:"",pq:""})},"필터 지우기"):null);
   return [bar,card("그림",{icon:"pic",count:list.length+"장"+(L.idx.at?" · 목록 "+agoTxt(L.idx.at)+" 기준":"")},
     list.length?h("div",{class:"pics"},list.slice(0,L.pn).map(p=>{const ns=use[p]||[];
-      return h("button",{class:"pic","data-k":"pic:"+p,onclick:()=>{L.pic=p;render();$("#scroll").scrollTop=0}},h("div",{class:"th"},picThumb(p)),
+      return h("button",{class:"pic","data-k":"pic:"+p,onclick:()=>{L.pic=p;render();$("#scroll").scrollTop=0}},h("div",{class:"th"},imgEl(p)),
         h("b",null,picName(p)),h("small",null,picDir(p)+(ns.length?" · 노트 "+ns.length+"건":" · 노트에 안 넣음")))})):h("div",{class:"empty"},"조건에 맞는 그림이 없습니다"),
     list.length>L.pn?h("button",{class:"btn",onclick:()=>{L.pn+=24;render()}},"더 보기 ("+(list.length-L.pn)+"장 남음)"):null,
     h("div",{class:"faint",style:"font-size:12px"},"그림은 세 장씩 받아 옵니다. 한 장에 몇 초 걸릴 수 있습니다."))];
@@ -2521,7 +2535,7 @@ function viewPics(){
 function picOne(p,ns){const L=S.lib;
   return [h("div",{class:"row"},h("button",{class:"btn",onclick:()=>{L.pic=null;render()}},"← 그림 목록"),
       h("div",{style:"flex:1;min-width:0"},h("b",{style:"font-size:17px;overflow-wrap:anywhere"},picName(p)),h("div",{class:"faint",style:"font-size:12px;overflow-wrap:anywhere"},p))),
-    card("그림",{icon:"pic"},h("div",{class:"md"},picThumb(p))),
+    card("그림",{icon:"pic"},h("div",{class:"md"},imgEl(p))),
     card("이 그림을 쓰는 노트",{icon:"news",count:ns.length+"건"},ns.length?ns.map(n=>h("button",{class:"lrow",onclick:()=>{S.view="lib";L.open=n.path;L.pic=null;render();$("#scroll").scrollTop=0}},
       h("b",null,n.t),h("small",null,[n.d,n.p,n.s].filter(Boolean).join(" · ")))):h("div",{class:"empty"},"이 그림을 넣은 노트가 없습니다"))];
 }
@@ -2544,7 +2558,7 @@ async function connect(){
     S.data=d;ls.set("desk:cfg",S.cfg);ls.set("desk:cache",d);S.drafts["su-pass"]="";render();toast("연결했습니다")}
   catch(e){S.cfg=null;S.setupErr=e.message;render()}
 }
-function lock(){ls.del("desk:cfg");ls.del("desk:cache");S.cfg=null;S.data=null;S.demo=false;S.sel=null;render()}
+function lock(){ls.del("desk:cfg");ls.del("desk:cache");IMGC.clear();imgcSize=0;if(window.caches)caches.delete(IMG_CACHE).catch(()=>{});S.cfg=null;S.data=null;S.demo=false;S.sel=null;render()}
 
 /* ═════════ 전체 그리기 ═════════ */
 function navCounts(){if(!S.data)return{};const today=TODAY(),open=S.data.tasks.filter(t=>!isDone(t));
@@ -2586,7 +2600,9 @@ function render(){
   if(!VIEWS.some(v=>v[0]===S.view))S.view="today";
   if(S.view!=="att"&&S.pay.open)S.pay={open:false,rows:null,busy:false};
   if(S.view!=="pf"&&S.pfdoc.html)S.pfdoc=PFDOC0(); // desk: 포트폴리오 화면을 떠나면 받아 둔 문서를 버린다
-  if(S.view!=="lib"&&S.view!=="pics"&&(S.lib.idx||S.lib.err))S.lib=libNew(); // desk: 작업·그림 화면을 떠나면 받아 둔 노트와 그림을 버린다
+  if(S.view!=="lib"&&S.view!=="pics"&&(S.lib.idx||S.lib.err))S.lib=libNew(); // desk: 작업·그림 화면을 떠나면 받아 둔 노트를 버린다(그림은 IMGC에 남겨 다시 올 때 바로 보인다)
+  // 다시 그리면 화면에서 사라진 칸을 그만 지켜보고, 아직 보내지 않은 그림 요청은 뺀다(새 칸이 보이면 다시 청한다)
+  if(imgObs){imgObs.disconnect();imgQ.splice(0).forEach(p=>imgWait.delete(p))}
   $("#app").hidden=false;syncProjects();
   const cnt=navCounts();
   fill($("#nav"),VIEWS.map(([k,n,icn],i)=>h("button",{"aria-current":S.view===k?"page":null,onclick:()=>{S.view=k;ls.set("desk:view",k);S.sel=null;render();$("#scroll").scrollTop=0},title:`${n} (${i+1})`},ic(icn),n,cnt[k]?h("span",{class:"c"},cnt[k]):null)),
@@ -2683,7 +2699,8 @@ async function demoApi(action,args){
   if(action==="history")return demoHist().items;
   if(action==="mailBody")return [{from:"예시",date:new Date().toISOString(),body:"예시 본문입니다."}];
   if(action==="jobMail")return [];
-  if(action==="works")return {at:new Date().toISOString(),notes:[{p:"예시 프로젝트",s:"저장",t:"예시) 저장 순서 수정",d:TODAY(),path:"demo/a.md",sum:"저장이 뒤바뀌던 것을 고쳤다.",heads:["문제","원인","결정 과정","수정","확인","남은 문제"],imgs:["demo/a.svg"]},{p:"예시 프로젝트",s:"화면",t:"예시) 설정 화면 정리",d:addD(TODAY(),-1),path:"demo/b.md",sum:"글자가 겹치던 곳을 고쳤다.",heads:["동작","바뀐 파일"],imgs:[]}],imgs:["demo/a.svg","demo/따로 그린 구조.svg"]};
+  if(action==="works")return {at:new Date().toISOString(),notes:[{p:"예시 프로젝트",s:"저장",t:"예시) 저장 순서 수정",d:TODAY(),path:"demo/a.md",sum:"저장이 뒤바뀌던 것을 고쳤다.",heads:["문제","원인","결정 과정","수정","확인","남은 문제"],imgs:["demo/a.svg"]},{p:"예시 프로젝트",s:"화면",t:"예시) 설정 화면 정리",d:addD(TODAY(),-1),path:"demo/b.md",sum:"글자가 겹치던 곳을 고쳤다.",heads:["동작","바뀐 파일"],imgs:[]}],imgs:["demo/a.svg","demo/따로 그린 구조.svg"],imgM:{}};
+  if(action==="workImgs"){const one=await demoApi("workImg",{});return {imgs:Object.fromEntries((args.paths||[]).map(p=>[p,one]))}}
   if(action==="workNote")return {text:"# 예시 노트\n\n![[a.svg]]\n\n## 문제\n저장한 값이 가끔 예전 값으로 돌아갔다.\n\n## 원인\n두 저장 요청이 겹치면 늦게 끝난 쪽이 이겼다.\n\n## 결정 과정\n잠금을 거는 안과 순서 번호를 붙이는 안을 견줬다. 잠금은 화면이 멈출 수 있어 **순서 번호**를 골랐다.\n\n## 수정\n- 요청마다 번호를 붙였다\n- 낮은 번호의 응답은 버린다\n\n## 확인\n| 잰 것 | 전 | 후 |\n|---|---|---|\n| 100번 저장 중 뒤바뀜 | 7번 | 0번 |\n\n## 남은 문제\n오프라인에서 쌓인 요청은 다루지 않았다.\n"};
   if(action==="workImg")return {mime:"image/svg+xml",b64:"PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA0MjAgMTIwIj48cmVjdCB3aWR0aD0iNDIwIiBoZWlnaHQ9IjEyMCIgZmlsbD0iI2ZmZiIvPjxyZWN0IHg9IjIwIiB5PSI0MCIgd2lkdGg9IjExMCIgaGVpZ2h0PSI0MCIgcng9IjYiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzMzMyIvPjx0ZXh0IHg9Ijc1IiB5PSI2NSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1zaXplPSIxMyI+7KCA7J6lIOyalOyyrTwvdGV4dD48cGF0aCBkPSJNMTMwIDYwaDcwIiBzdHJva2U9IiMzMzMiLz48cmVjdCB4PSIyMDAiIHk9IjQwIiB3aWR0aD0iMTEwIiBoZWlnaHQ9IjQwIiByeD0iNiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjYzAzOTJiIi8+PHRleHQgeD0iMjU1IiB5PSI2NSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1zaXplPSIxMyIgZmlsbD0iI2MwMzkyYiI+7Iic7IScIOqzoOyglTwvdGV4dD48cGF0aCBkPSJNMzEwIDYwaDUwIiBzdHJva2U9IiMzMzMiLz48dGV4dCB4PSIzODUiIHk9IjY1IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LXNpemU9IjEzIj7tjIzsnbw8L3RleHQ+PC9zdmc+"};
   if(action==="pays")return [{id:"demo-pay",m:TODAY().slice(0,7).replace("-","."),d:TODAY(),g:3000000,ded:400000,net:2600000}];

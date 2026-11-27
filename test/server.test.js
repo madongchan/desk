@@ -358,6 +358,12 @@ idx.setContent(JSON.stringify(Object.assign(JSON.parse(idx.getBlob().getDataAsSt
 assert.deepStrictEqual(post('works', {}).data.imgs, ['entities/게임/Docs/구조.svg', 'entities/게임/Docs/따로 그린 것.svg']);
 assert.strictEqual(Buffer.from(post('workImg', { path: 'entities/게임/Docs/따로 그린 것.svg' }).data.b64, 'base64').toString(), '<svg id="b"/>');
 assert.match(post('workImg', { path: 'entities/게임/목록에 없는 노트.md' }).error, /목록에 없는/);
+// 여러 장 한 번에: 받을 수 있는 것은 주고, 목록 밖은 그 장만 거절한다
+r = post('workImgs', { paths: ['entities/게임/Docs/구조.svg', 'entities/게임/목록에 없는 노트.md', 'entities/게임/Docs/따로 그린 것.svg'] }).data.imgs;
+assert.deepStrictEqual([Buffer.from(r['entities/게임/Docs/구조.svg'].b64, 'base64').toString(), r['entities/게임/Docs/따로 그린 것.svg'].mime], ['<svg/>', 'image/svg+xml']);
+assert.match(r['entities/게임/목록에 없는 노트.md'].err, /목록에 없는/);
+assert.strictEqual(Object.keys(post('workImgs', { paths: Array(20).fill('entities/게임/Docs/구조.svg').map((p, i) => p + i) }).data.imgs).length, 8);   // 한 번에 8장까지
+assert.deepStrictEqual(post('workImgs', {}).data.imgs, {});
 root._files.splice(root._files.indexOf(idx), 1);
 
 // 지원 서류(이력서, 포트폴리오): PC가 desk 폴더에 써 둔 한 파일짜리 HTML을 읽기만 해서 준다. 비공개라 load에는 넣지 않는다

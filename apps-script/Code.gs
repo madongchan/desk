@@ -13,7 +13,7 @@
  */
 
 const TZ = 'Asia/Seoul';
-const VERSION = '2026-11-27a';
+const VERSION = '2026-11-27b';
 const WORK_FILE = '작업 목록.json';   // PC의 tools/sync-vault.js가 쓰는 파일. 서버는 읽기만 한다
 const GIT_FILE = '작업 내역.md';   // PC의 tools/sync-git.js가 쓰는 파일. 서버는 읽기만 한다
 // 지원 서류: PC의 portfolio 저장소 build.js가 desk 폴더에 쓰는 한 파일짜리 문서들. 서버는 이 이름들만, 읽기만 한다
@@ -210,6 +210,17 @@ function ocr_(url) {
   } finally {
     try { Drive.Files.remove(doc.id); } catch (err) { /* 못 지워도 읽은 글은 준다. 드라이브에 임시 문서가 남는다 */ }
   }
+}
+
+/** 작업 목록에 적힌 그림 하나를 읽는다. 목록 밖 경로와 그림이 아닌 파일은 거절한다(드라이브의 다른 파일을 읽는 길이 되지 않게). */
+function workImg_(idx, folder, path) {
+  if ((idx.imgs || []).indexOf(path) < 0 && !idx.notes.some(function (n) { return (n.imgs || []).indexOf(path) >= 0; })) throw new Error('작업 목록에 없는 그림입니다');
+  const ext = path.split('.').pop().toLowerCase();
+  const mime = { svg: 'image/svg+xml', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp' }[ext];
+  if (!mime) throw new Error('그림 파일이 아닙니다');
+  const bytes = under_(vault_(folder), path).getBlob().getBytes();
+  if (bytes.length > 8 * 1024 * 1024) throw new Error('그림이 너무 큽니다(8MB 초과)');
+  return { mime: mime, b64: Utilities.base64Encode(bytes) };
 }
 
 /** PC가 만든 작업 목록을 읽는다. */
@@ -409,7 +420,7 @@ const ACTIONS = {
   works: function (a, folder) {
     const idx = workIndex_(folder);
     return { at: idx.at, notes: idx.notes.map(function (n) { const o = Object.assign({}, n); delete o.m; delete o.z; return o; }),   // m, z는 PC 프로그램만 쓰는 값
-      imgs: idx.imgs || [] };   // 그림 탭: 노트에 넣지 않은 그림까지
+      imgs: idx.imgs || [], imgM: idx.imgM || {} };   // 그림 탭: 노트에 넣지 않은 그림까지. imgM은 그림을 고친 시각(화면 캐시가 낡았는지 가린다)
   },
 
   /** 노트 하나의 글. 목록에 적힌 경로만 읽는다(드라이브의 다른 파일을 읽는 길이 되지 않게). */
@@ -422,14 +433,21 @@ const ACTIONS = {
 
   /** 그림 하나. 작업 목록에 적힌 그림(노트가 쓰는 것, 또는 PC가 훑은 그림 목록)일 때만 읽는다. */
   workImg: function (a, folder) {
-    const path = String(a.path || ''), idx = workIndex_(folder);
-    if ((idx.imgs || []).indexOf(path) < 0 && !idx.notes.some(function (n) { return (n.imgs || []).indexOf(path) >= 0; })) throw new Error('작업 목록에 없는 그림입니다');
-    const ext = path.split('.').pop().toLowerCase();
-    const mime = { svg: 'image/svg+xml', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp' }[ext];
-    if (!mime) throw new Error('그림 파일이 아닙니다');
-    const bytes = under_(vault_(folder), path).getBlob().getBytes();
-    if (bytes.length > 8 * 1024 * 1024) throw new Error('그림이 너무 큽니다(8MB 초과)');
-    return { mime: mime, b64: Utilities.base64Encode(bytes) };
+    return workImg_(workIndex_(folder), folder, String(a.path || ''));
+  },
+
+  /** 그림 여러 장을 한 번에(요청 한 번에 드는 시간이 길어서 묶는다). 한 장이 실패해도 나머지는 준다. */
+  workImgs: function (a, folder) {
+    const idx = workIndex_(folder), out = {};
+    let total = 0;
+    (Array.isArray(a.paths) ? a.paths : []).slice(0, 8).forEach(function (p) {
+      p = String(p);
+      try {
+        if (total > 20 * 1024 * 1024) throw new Error('한 번에 받을 양을 넘었습니다');
+        out[p] = workImg_(idx, folder, p); total += out[p].b64.length;
+      } catch (e) { out[p] = { err: e.message }; }
+    });
+    return { imgs: out };
   },
 
   /**

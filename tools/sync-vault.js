@@ -70,7 +70,10 @@ if (require.main === module) {
   }).sort((a, b) => (a.d < b.d ? 1 : a.d > b.d ? -1 : a.path < b.path ? -1 : 1));
   // 그림 탭은 노트에 넣지 않은 그림까지 보여 준다. 서버는 이 목록에 있는 그림만 읽어 준다
   const imgs = files.filter(f => IMG.test(f)).sort();
-  fs.writeFileSync(out, JSON.stringify({ at: new Date().toISOString(), notes, imgs }));
+  // 그림을 고친 시각. 화면은 이 값이 같으면 기기에 받아 둔 그림을 다시 쓰고, 다르면 새로 받는다
+  const imgM = {};
+  imgs.forEach(f => { imgM[f] = Math.floor(fs.statSync(path.join(vault, f)).mtimeMs); });
+  fs.writeFileSync(out, JSON.stringify({ at: new Date().toISOString(), notes, imgs, imgM }));
   console.log(`작업 목록 ${notes.length}건, 그림 ${imgs.length}장(새로 읽은 노트 ${read}건)을 적었다: ${out}`);
 }
 
