@@ -952,7 +952,7 @@ function syncProjects(names){(names||[...(S.data&&S.data.cats||[]).map(c=>c.n),.
 
 /* ═════════ 상태 ═════════ */
 const S={
-  cfg:ls.get("desk:cfg",null),preset:(window.DESK&&window.DESK.url)?window.DESK:null, data:ls.get("desk:cache",null), demo:false,
+  cfg:ls.get("desk:cfg",null),preset:(window.DESK&&window.DESK.url)?window.DESK:null, data:ls.get("desk:cache",null),
   view:ls.get("desk:view","today"), week:0, sel:null, drafts:{}, qmode:"task",
   f:{q:"",p:"",y:"",mode:"list"}, sync:{busy:false,err:null}, addDay:null, palette:null,
 };
@@ -962,7 +962,6 @@ const PVIEWS=[];
 
 /* ═════════ 서버 ═════════ */
 async function api(action,args){
-  if(S.demo)return demoApi(action,args);
   const url=S.cfg.url;
   // 읽기 전용 동작만 한 번 더 시도(추가·수정은 두 번 들어가지 않게 재시도 안 함)
   const safe=/^(load|ping|history)/.test(action);let txt;
@@ -978,11 +977,11 @@ async function api(action,args){
 }
 async function fetchT(url,opts,ms){const c=new AbortController();const t=setTimeout(()=>c.abort(),ms);try{return await fetch(url,Object.assign({signal:c.signal},opts))}finally{clearTimeout(t)}}
 async function refresh(quiet){
-  if(!S.cfg&&!S.demo)return;
+  if(!S.cfg)return;
   S.sync.busy=true;S.sync.err=null;renderSync();
   try{
     const d=await api("load",{});
-    S.data=d;if(!S.demo){ls.set("desk:cache",d);imgPrefetchSoon()}S.authErr=null;notifyEvents();
+    S.data=d;ls.set("desk:cache",d);imgPrefetchSoon();S.authErr=null;notifyEvents();
   }
   catch(e){S.sync.err=e.message;if(!quiet)toast("불러오기 실패 · "+e.message,"bad");if(S.authErr&&!S.data){S.cfg=null;}}
   S.sync.busy=false;
@@ -1001,7 +1000,7 @@ async function mutate(apply,call,okMsg){
   catch(e){S.data=JSON.parse(snap);persist();render();toast("옵시디언 저장 실패 · "+e.message,"bad")}
   finally{saving--}
 }
-const persist=()=>{if(!S.demo&&S.data)ls.set("desk:cache",S.data)};
+const persist=()=>{if(S.data)ls.set("desk:cache",S.data)};
 const byId=(arr,id)=>arr.find(x=>x.id===id);
 function replaceIn(arr,oldId,obj){if(obj&&obj.id&&obj.id!==oldId)MALIAS[oldId]=obj.id;const i=arr.findIndex(x=>x.id===oldId);if(i>=0)arr[i]=Object.assign(arr[i],obj);}
 
@@ -1354,7 +1353,7 @@ function workBody(){
   }else if(f.mode==="git"){
     // desk: 작업 내역 — PC가 깃 기록에서 옮겨 둔 커밋을 날짜별로 본다. 읽기만 한다.
     // 포트폴리오는 받아 둔 목록을 6시간 쓰지만 여기는 방금 한 일을 보는 곳이라 10분이 지나면 새로 받는다
-    pfLoad(!!PF.hist&&!PF.hist.demo&&!PF.err&&Date.now()-(PF.hist.at||0)>10*60e3);
+    pfLoad(!!PF.hist&&!PF.err&&Date.now()-(PF.hist.at||0)>10*60e3);
     const all=((PF.hist&&PF.hist.items)||[]).filter(t=>t.git&&(!f.p||t.p===f.p)&&(!f.y||t.y===f.y)&&(!q||t.t.toLowerCase().includes(q)));
     if(!all.length)return h("div",{class:"empty"},PF.loading?"작업 내역을 불러오는 중…":PF.err?"작업 내역을 읽지 못했습니다: "+PF.err:"작업 내역이 없습니다. PC에서 tools/sync-git.js를 돌리면 깃 커밋이 여기에 나옵니다"," ",h("button",{class:"btn sm",onclick:()=>pfLoad(true)},"다시 읽기"));
     const byDay={};all.forEach(t=>((byDay[t.d]=byDay[t.d]||{c:[]}).c.push(t)));
@@ -1529,7 +1528,7 @@ function sideBtn(){const n=S.focus?"사이드바 펴기":"사이드바 접기";
 
 /* ═════════ 연결 끊김 대비·원인 확인 ═════════ */
 function connBanner(){
-  if(S.demo||!S.sync.err)return null;
+  if(!S.sync.err)return null;
   return h("div",{class:"banner bad-b"},h("span",null,"⚠ 옵시디언 연결이 잠시 끊겼습니다. 마지막으로 받은 내용을 보여 드리는 중입니다 · "+S.sync.err),h("span",{style:"flex:1"}),
     h("button",{class:"btn sm",onclick:()=>refresh()},"다시 시도"),h("button",{class:"btn sm",onclick:diagnose},"원인 확인"));
 }
@@ -1819,7 +1818,7 @@ const GJ_YEARS=["1년","2년","3년","4년","5년","7년","10년"];
 const GJP=Object.assign({duty:"게임개발(클라이언트)",engine:"Unity 우선",area:"서울·경기",years:""},ls.get("desk:jobpref2",null)||{});
 if(!GJ_DUTY[GJP.duty])GJP.duty="게임개발(클라이언트)";
 function gjLoad(force){
-  const G=S.gj;if(S.demo||G.busy||((G.d||G.err)&&!force))return;G.busy=true;G.err=null;
+  const G=S.gj;if(G.busy||((G.d||G.err)&&!force))return;G.busy=true;G.err=null;
   api("jobList",{duty:GJ_DUTY[GJP.duty]}).then(r=>{G.d=r;const seen=ls.get("desk:gjseen",[]);G.fresh={};r.rows.forEach(x=>{if(!seen.includes(x.no))G.fresh[x.no]=true});
       ls.set("desk:gjseen",[...new Set([...r.rows.map(x=>x.no),...seen])].slice(0,600))})
     .catch(e=>{G.err=e.message}).finally(()=>{G.busy=false;if(S.view==="job")render()});
@@ -1861,7 +1860,6 @@ function gjCard(){
   const pref=h("div",{class:"row",style:"font-size:12px;color:var(--fg2);gap:12px"},
     pick("gj-d","duty","직무","게임개발(클라이언트)",Object.keys(GJ_DUTY).slice(1),()=>{if(!GJP.duty)GJP.duty="게임개발(클라이언트)";ls.set("desk:jobpref2",GJP);Object.assign(G,{d:null,err:null,n:15,open:{}});gjLoad(true)}),
     pick("gj-e","engine","엔진","가리지 않음",Object.keys(GJ_ENGINE)),pick("gj-a","area","지역","가리지 않음",Object.keys(GJ_AREA)),pick("gj-y","years","내 경력","정하지 않음",GJ_YEARS));
-  if(S.demo)return card("게임잡 공고",{icon:"news"},h("div",{class:"empty"},"예시 모드에서는 게임잡 공고를 읽지 않습니다"));
   if(G.err)return card("게임잡 공고",{icon:"news"},h("div",{class:"banner"},"게임잡 공고를 읽지 못했습니다: "+G.err," ",h("button",{class:"btn sm",onclick:()=>gjLoad(true)},"다시 시도")));
   if(!G.d)return card("게임잡 공고",{icon:"news",count:"불러오는 중…"},h("div",{class:"empty"},"게임잡에서 「"+GJP.duty+"」 공고를 읽는 중입니다. 처음에는 20초쯤 걸립니다."),pref);
   const rows=G.d.rows.map((x,i)=>Object.assign({i,sc:gjScore(x,GJP),saved:(S.data.jobs||[]).some(j=>j.link===x.link)},x)).sort((a,b)=>b.sc.s-a.sc.s||a.i-b.i);
@@ -1919,8 +1917,7 @@ function pfCopy(t,msg){(navigator.clipboard?navigator.clipboard.writeText(t):Pro
 
 // 완료 업무 전체(3월~)는 따로 불러와 이 브라우저에 6시간 보관
 function pfLoad(force){
-  if(S.demo){if(!PF.hist||!PF.hist.demo){PF.hist=demoHist();PF.replay=true}return}
-  if(PF.loading||(PF.err&&!force)||(PF.hist&&!PF.hist.demo&&!force&&Date.now()-(PF.hist.at||0)<6*3600e3))return; // desk: 실패한 뒤에는 누를 때만 다시 요청한다
+  if(PF.loading||(PF.err&&!force)||(PF.hist&&!force&&Date.now()-(PF.hist.at||0)<6*3600e3))return; // desk: 실패한 뒤에는 누를 때만 다시 요청한다
   PF.loading=true;
   api("history",{}).then(r=>{PF.hist={at:Date.now(),items:r};PF.err=null;PF.replay=true;ls.set("desk:hist",PF.hist)})
     .catch(e=>{PF.err=e.message}).finally(()=>{PF.loading=false;if(/^(pf|acct|letter|job|work)$/.test(S.view))render()});
@@ -2204,15 +2201,6 @@ function storyGo(n,first){
     h("div",{class:"s-dots"},sl.map((_,k)=>h("button",{class:k===n?"on":"","aria-label":`${k+1}번째 장`,onclick:()=>storyGo(k)}))),
     h("button",{class:"btn pri sm",onclick:()=>storyGo(n+1)},n===sl.length-1?"마치기":"다음 →"));
 }
-// 예시 데이터용 가짜 기록(같은 값이 나오도록 고정 난수)
-function demoHist(){
-  let s=11;const rnd=()=>(s=(s*16807)%2147483647)/2147483647;
-  const W={"업무":[3,10],"개인":[4,10],"공부":[5,10]},P=Object.keys(W);
-  const items=[];for(let i=0;i<160;i++){const p=P[Math.floor(rnd()*P.length)],[a,b]=W[p],m=a+Math.floor(rnd()*(b-a+1)),day=`2026-${pad(m)}-${pad(1+Math.floor(rnd()*27))}`;if(day>TODAY())continue;
-    items.push({id:"dh"+i,t:`예시) ${p} 업무 ${i+1}`,d:day,p,y:VZK[Math.floor(rnd()*rnd()*VZK.length)],r:rnd()<.3?"상":"중",s:"완료"})}
-  return {at:Date.now(),demo:true,items};
-}
-
 /* ═════════ 커리어: 공고 메일 → 지원처 → 체크리스트 → 지원 ═════════ */
 const JOB_CK=["공고 원문 확인","요건 매칭표","이력서·경력기술서 맞춤","자기소개서","숫자·회사명 최종 점검","제출"];
 const jobCk=j=>String(j.chk||"").split(",").filter(Boolean).map(Number);
@@ -2303,7 +2291,7 @@ S.mf={main:"all"};S.mailOpen={};S.mailBody={};
 /* ═════════ desk: 원본에서 다시 옮겨 온 화면 (viewJob, mailCard, mailSheet, jmLoad, jmOpen) ═════════ */
 const JM={d:null,loading:false,err:null,q:ls.get("desk:jobq","")};
 function jmLoad(force){
-  if(S.demo||JM.loading||(JM.d&&!force))return;
+  if(JM.loading||(JM.d&&!force))return;
   if(JM.err&&!force)return;
   JM.loading=true;JM.err=null;
   api("jobMail",{q:JM.q}).then(r=>{JM.d=r}).catch(e=>{JM.err=e.message}).finally(()=>{JM.loading=false;if(S.view==="job")render()});
@@ -2335,10 +2323,10 @@ function viewJob(){
   const save=()=>{JM.q=(S.drafts["jm-q"]??JM.q).trim();ls.set("desk:jobq",JM.q);jmLoad(true);render()};
   if(S.drafts["jm-q"]===undefined)S.drafts["jm-q"]=JM.q;
   const mailC=card("공고 메일",{icon:"news",count:JM.loading?"불러오는 중…":`최근 30일 ${mails.length}통`,right:h("button",{class:"btn ghost sm",onclick:()=>jmLoad(true)},ic("refresh"))},
-    S.demo?h("div",{class:"empty"},"예시 모드에서는 메일을 불러오지 않습니다"):JM.err?h("div",{class:"banner"},"메일을 불러오지 못했습니다: "+JM.err):null,
+    JM.err?h("div",{class:"banner"},"메일을 불러오지 못했습니다: "+JM.err):null,
     mails.length?h("div",{class:"list",style:"max-height:420px;overflow:auto"},mails.map(m=>h("div",{class:"task",style:"grid-template-columns:minmax(0,1fr) auto;gap:10px"},
       h("div",{class:"body",onclick:()=>jmOpen(m)},h("span",{class:"tt"},m.subj),h("div",{class:"meta"},h("span",null,fmtMD(dOf(m.at))),h("span",null,m.from))),
-      h("button",{class:"btn sm",onclick:()=>{S.drafts["j-n"]=m.subj.replace(/^\[[^\]]*\]\s*/,"").slice(0,40);render();const el=$("#j-n");if(el){el.scrollIntoView({block:"center"});el.focus();el.select()}}},"지원처로")))):(!JM.loading&&!S.demo&&!JM.err?h("div",{class:"empty"},"찾은 메일이 없습니다"):null),
+      h("button",{class:"btn sm",onclick:()=>{S.drafts["j-n"]=m.subj.replace(/^\[[^\]]*\]\s*/,"").slice(0,40);render();const el=$("#j-n");if(el){el.scrollIntoView({block:"center"});el.focus();el.select()}}},"지원처로")))):(!JM.loading&&!JM.err?h("div",{class:"empty"},"찾은 메일이 없습니다"):null),
     h("div",{class:"row"},draftIn("jm-q",{class:"in grow",placeholder:"기본: 제목에 채용·공고·면접·서류전형·입사지원","aria-label":"메일 검색 조건",onkeydown:e=>{if(e.key==="Enter"&&!e.isComposing)save()}}),h("button",{class:"btn ghost sm",onclick:save},"검색 조건 저장")));
   const st=pfStats(pfItems()),outN=S.data.tasks.filter(t=>t.out&&(dOf(t.d)||"").startsWith(today.slice(0,7))).length;
   const ranked=live.map(j=>({j,s:jobScore(j)})).sort((a,b)=>(b.s??-1)-(a.s??-1));
@@ -2400,15 +2388,14 @@ function mailSheet(){
 // 노트 내용은 평소 읽기에 들어 있지 않다. 이 화면을 열 때 받아 와 여기에만 들고, 기기에 저장하지 않는다
 const libNew=()=>({idx:null,got:0,busy:false,err:null,p:"",s:"",cat:"",q:"",stage:"",n:60,open:null,text:{},noteBusy:false,pk:"",pq:"",pn:24,pic:null});
 S.lib=libNew();
-// 목록은 받은 지 2분이 지났을 때만 다시 받는다(PC가 2분마다 갱신하고, 바뀌었을 때만 파일을 쓴다). 다시 받는 동안에는 옛 목록을 그대로 보여 준다
-const LIST_TTL=12e4;
-function libLoad(force){const L=S.lib;if(L.busy||(((L.idx&&Date.now()-L.got<LIST_TTL)||L.err)&&!force))return;L.busy=true;L.err=null;
-  api("works",{}).then(r=>{L.idx=r;L.got=Date.now();if(!S.demo)imgPrefetchSoon()}).catch(e=>{L.err=e.message}).finally(()=>{L.busy=false;if(S.view==="lib"||S.view==="pics")render()})}
+// 목록은 처음 한 번 받고, 그 뒤로는 아래 listWatch가 판이 바뀐 것을 알릴 때만 다시 받는다. 다시 받는 동안에는 옛 목록을 그대로 보여 준다
+function libLoad(force){const L=S.lib;if(L.busy||((L.idx||L.err)&&!force))return;L.busy=true;L.err=null;
+  api("works",{}).then(r=>{if(L.idx&&L.idx.ver!==r.ver)L.text={};L.idx=r;L.got=Date.now();imgPrefetchSoon()}).catch(e=>{L.err=e.message}).finally(()=>{L.busy=false;if(S.view==="lib"||S.view==="pics")render()})}
 // desk: 목록이 바뀌었나만 묻기. 서버는 브라우저에 먼저 알려 줄 수 없어서, 작업·그림·문서 탭이 열려 있고 창이 보일 때
 // 20초마다 목록의 판(드라이브에서 고친 시각)만 묻는다. 바뀌었으면 그 목록만 다시 받는다(PC는 볼트가 바뀌면 바로 목록을 다시 쓴다)
 let verT=0;
 function listWatch(){clearTimeout(verT);verT=setTimeout(async()=>{
-  if(!S.demo&&S.data&&["lib","pics","docs"].includes(S.view)&&document.visibilityState==="visible"){
+  if(S.data&&["lib","pics","docs"].includes(S.view)&&document.visibilityState==="visible"){
     try{const v=await api("listVer",{});
       if(S.lib.idx&&v.works&&v.works!==S.lib.idx.ver)libLoad(true);
       if(DOCS.idx&&v.docs&&v.docs!==DOCS.idx.ver)docsLoad(true)}catch{/* 다음 차례에 다시 묻는다 */}}
@@ -2547,10 +2534,10 @@ function imgDone(p,v,mem=true){imgWait.delete(p);let shown=false;
 let preT=0,preOn=false;
 const imgPrefetchSoon=()=>{clearTimeout(preT);preT=setTimeout(imgPrefetch,4000)};
 async function imgPrefetch(){
-  if(preOn||S.demo||!S.data||!window.caches||(navigator.connection&&navigator.connection.saveData))return;preOn=true;
+  if(preOn||!S.data||!window.caches||(navigator.connection&&navigator.connection.saveData))return;preOn=true;
   const nap=ms=>new Promise(r=>setTimeout(r,ms));
   try{
-    const L=S.lib;if(!L.idx||Date.now()-L.got>LIST_TTL){L.idx=await api("works",{});L.got=Date.now()}
+    const L=S.lib;if(!L.idx){L.idx=await api("works",{});L.got=Date.now()}
     const c=await caches.open(IMG_CACHE),need=[];
     for(const p of picList().all)if(imgM(p)&&!IMGC.has(p)&&!(await c.match(imgKey(p))))need.push(p);
     let i=0;
@@ -2635,7 +2622,7 @@ function picOne(p,ns){const L=S.lib;
 /* ═════════ desk: 문서 — 옵시디언 볼트 전체를 옵시디언처럼 본다. 왼쪽 폴더 나무, 가운데 노트, [[링크]]로 이동, 이 노트를 가리키는 노트. 읽기만 한다 ═════════ */
 // 목록은 PC가 만든 「문서 목록.json」(경로, 링크, 그림). 받은 지 10분이 지났을 때만 다시 받는다. 노트 글은 열 때 받아 메모리에만 둔다
 const DOCS={idx:null,got:0,busy:false,err:null,by:null,back:null,open:null,q:"",fold:{},text:{},noteBusy:false};
-function docsLoad(force){const D=DOCS;if(D.busy||(((D.idx&&Date.now()-D.got<LIST_TTL)||D.err)&&!force))return;D.busy=true;D.err=null;
+function docsLoad(force){const D=DOCS;if(D.busy||((D.idx||D.err)&&!force))return;D.busy=true;D.err=null;
   api("docs",{}).then(r=>{const by={},back={},put=(k,p)=>{if(!by[k]||by[k].length>p.length)by[k]=p};
       // 링크 이름 → 경로(이름만 적으면 같은 이름 가운데 경로가 짧은 것, 옵시디언과 같다), 노트 → 그 노트를 가리키는 노트들
       r.docs.forEach(d=>{const f=d.path.toLowerCase(),n=f.split("/").pop();[f,n,f.slice(0,-3),n.slice(0,-3)].forEach(k=>put(k,d.path));
@@ -2704,7 +2691,7 @@ function setupView(){
     S.preset?null:h("label",{class:"field"},h("label",null,"연결 주소 (Apps Script 웹 앱 URL)"),h("input",{class:"in",id:"su-url",placeholder:"https://script.google.com/macros/s/…/exec",value:S.drafts["su-url"]||"",oninput:e=>S.drafts["su-url"]=e.target.value})),
     h("label",{class:"field"},h("label",null,"비밀번호 (Apps Script의 PASS 값)"),h("input",{class:"in",id:"su-pass",type:"password",autocomplete:"current-password",value:S.drafts["su-pass"]||"",oninput:e=>S.drafts["su-pass"]=e.target.value,onkeydown:e=>{if(e.key==="Enter")connect()}})),
     err?h("div",{class:"err"},err):null,
-    h("div",{class:"row"},h("button",{class:"btn pri",id:"su-go",onclick:connect},"연결"),h("button",{class:"btn",onclick:()=>{S.demo=true;S.data=demoData();render()}},"예시로 둘러보기"))));
+    h("div",{class:"row"},h("button",{class:"btn pri",id:"su-go",onclick:connect},"연결"))));
 }
 async function connect(){
   const url=S.preset?S.preset.url:(S.drafts["su-url"]||"").trim(),pass=S.drafts["su-pass"]||"";
@@ -2715,7 +2702,7 @@ async function connect(){
     S.data=d;ls.set("desk:cfg",S.cfg);ls.set("desk:cache",d);S.drafts["su-pass"]="";render();toast("연결했습니다");imgPrefetchSoon()}
   catch(e){S.cfg=null;S.setupErr=e.message;render()}
 }
-function lock(){ls.del("desk:cfg");ls.del("desk:cache");IMGC.clear();imgcSize=0;Object.assign(DOCS,{idx:null,got:0,by:null,back:null,open:null,text:{},err:null});if(window.caches)caches.delete(IMG_CACHE).catch(()=>{});S.cfg=null;S.data=null;S.demo=false;S.sel=null;render()}
+function lock(){ls.del("desk:cfg");ls.del("desk:cache");IMGC.clear();imgcSize=0;Object.assign(DOCS,{idx:null,got:0,by:null,back:null,open:null,text:{},err:null});if(window.caches)caches.delete(IMG_CACHE).catch(()=>{});S.lib=libNew();S.cfg=null;S.data=null;S.sel=null;render()}
 
 /* ═════════ 전체 그리기 ═════════ */
 function navCounts(){if(!S.data)return{};const today=TODAY(),open=S.data.tasks.filter(t=>!isDone(t));
@@ -2757,8 +2744,8 @@ function render(){
   if(!VIEWS.some(v=>v[0]===S.view))S.view="today";
   if(S.view!=="att"&&S.pay.open)S.pay={open:false,rows:null,busy:false};
   if(S.view!=="pf"&&S.pfdoc.html)S.pfdoc=PFDOC0(); // desk: 포트폴리오 화면을 떠나면 받아 둔 문서를 버린다
-  // desk: 작업·그림 화면을 떠나면 받아 둔 노트 글과 고르던 조건을 버린다. 목록(idx)은 남긴다(백그라운드 미리 받기가 쓰고, 다시 올 때 바로 보인다)
-  if(S.view!=="lib"&&S.view!=="pics"&&(Object.keys(S.lib.text).length||S.lib.err||S.lib.open||S.lib.pic||S.lib.q||S.lib.pq))S.lib=Object.assign(libNew(),{idx:S.lib.idx,got:S.lib.got});
+  // desk: 작업·그림 화면을 떠나면 고르던 조건만 버린다. 목록과 받아 둔 노트 글은 메모리에 남겨 다시 올 때 바로 보인다(기기에는 저장하지 않는다)
+  if(S.view!=="lib"&&S.view!=="pics"&&(S.lib.err||S.lib.open||S.lib.pic||S.lib.q||S.lib.pq))S.lib=Object.assign(libNew(),{idx:S.lib.idx,got:S.lib.got,text:S.lib.text});
   // 다시 그리면 화면에서 사라진 칸을 그만 지켜보고, 아직 보내지 않은 그림 요청은 뺀다(새 칸이 보이면 다시 청한다)
   if(imgObs){imgObs.disconnect();imgQ.splice(0).forEach(p=>imgWait.delete(p))}
   $("#app").hidden=false;syncProjects();
@@ -2770,7 +2757,7 @@ function render(){
   const V=[...VIEWS,...PVIEWS].find(v=>v[0]===S.view)||VIEWS[0];
   $("#app").classList.toggle("focus",!!S.focus);
   fill($("#brand"),h("img",{src:"icon.svg",alt:""}),h("b",null,"desk"),sideBtn());
-  fill($("#toolbar"),S.focus?sideBtn():null,h("h1",null,V[1]),S.demo?h("span",{class:"pill orange"},"예시 데이터"):null,h("span",{class:"sp"}),
+  fill($("#toolbar"),S.focus?sideBtn():null,h("h1",null,V[1]),h("span",{class:"sp"}),
     TM.run?h("button",{class:"btn sm",onclick:()=>{S.view="tools";render()}},ic("tools"),h("span",{class:"num",id:"tm-mini"},tmFmt(tmLeft()))):null,
     h("button",{class:"search",onclick:openPalette,"aria-label":"검색 ("+KEY+"K)"},ic("search"),h("span",null,"검색·명령"),h("kbd",null,KEY+"K")),
     h("button",{class:"btn pri",onclick:()=>openQuick("task")},ic("plus"),"새로 만들기"));
@@ -2778,7 +2765,7 @@ function render(){
   const views={today:viewToday,work:viewWork,life:viewLife,att:viewAtt,pf:viewPf,job:viewJob,lib:viewLib,pics:viewPics,docs:viewDocs,tools:viewTools};
   if(S.view!=="pf"&&PF.story!=null)storyClose();
   let content;try{content=(views[S.view]||viewToday)()}catch(e){console.error(e);content=h("div",{class:"banner"},"이 화면을 그리는 중 문제가 생겼습니다: "+e.message)}
-  fill($("#page"),...[connBanner(),S.demo?h("div",{class:"banner"},"지금은 예시 데이터입니다. 실제 옵시디언과 연결하려면 ",h("button",{class:"btn sm",onclick:lock},"연결하기"),"를 누르세요."):null,...[].concat(content)].filter(Boolean));
+  fill($("#page"),...[connBanner(),...[].concat(content)].filter(Boolean));
   fill(layer,...[withGrip(sheetView()),dayModal(),paletteView(),quickModal(),diagView()].filter(Boolean));
   renderSync();restore();motionPlay(snap);
   function restore(){if(!aeId)return;const el=document.getElementById(aeId);if(el&&el!==document.activeElement){el.focus();try{if(selS!=null)el.setSelectionRange(selS,selE)}catch{}}}
@@ -2786,7 +2773,7 @@ function render(){
 function renderSync(){
   const el=$("#sync");if(!el)return;
   fill(el,h("span",{class:"led"+(S.sync.busy?" busy":S.sync.err?" bad":"")}),
-    h("span",{style:"flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap",title:S.sync.err||""},S.demo?"예시 데이터":S.sync.busy?"옵시디언과 맞추는 중…":S.sync.err?"연결 문제 · 다시 시도":S.data?`옵시디언 ${agoTxt(S.data.at)} 기준`:""),
+    h("span",{style:"flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap",title:S.sync.err||""},S.sync.busy?"옵시디언과 맞추는 중…":S.sync.err?"연결 문제 · 다시 시도":S.data?`옵시디언 ${agoTxt(S.data.at)} 기준`:""),
     h("button",{"aria-label":"새로고침",title:"새로고침",onclick:()=>refresh()},ic("refresh")),
     h("button",{"aria-label":"잠그기",title:"이 브라우저에서 연결 지우기",onclick:lock},ic("lock")));
 }
@@ -2815,7 +2802,7 @@ setInterval(()=>{const c=$("#clock");if(c){const d=new Date();c.textContent=`${p
 setInterval(()=>{if(!document.hidden&&!S.sel)refresh(true)},5*60e3);
 // 직원 상태만 1분마다 가볍게 다시 읽음(바뀌었을 때만 오른쪽 패널을 다시 그림)
 // desk: 직원 패널이 없어 1분마다 읽던 것을 뺐다
-document.addEventListener("visibilitychange",()=>{if(!document.hidden&&S.data&&!S.demo&&Date.now()-Date.parse(S.data.at||0)>60e3)refresh(true)});
+document.addEventListener("visibilitychange",()=>{if(!document.hidden&&S.data&&Date.now()-Date.parse(S.data.at||0)>60e3)refresh(true)});
 // desk: 푸시한 새 버전을 알아채면 저절로 새로고침한다. 이 화면이 받은 사본의 꼬리표(ETag)와 서버의 지금 꼬리표를 견준다
 // 쓰던 것이 날아가지 않게, 입력 중, 적다 만 글, 열린 창, 타이머, 저장 중이면 알림만 띄우고 다음 확인 때 다시 본다
 const reloadSafe=()=>!saving&&!S.sel&&!S.quick&&!S.palette&&!S.diag&&!TM.run&&!typing()&&!Object.values(S.drafts||{}).some(v=>v&&String(v).trim());
@@ -2831,43 +2818,6 @@ async function checkNewPage(){try{
 checkNewPage();setInterval(()=>{if(!document.hidden)checkNewPage()},5*60e3);
 document.addEventListener("visibilitychange",()=>{if(!document.hidden)checkNewPage()});
 let lastDay=TODAY();setInterval(()=>{if(TODAY()!==lastDay){lastDay=TODAY();render()}},60e3);
-
-/* ═════════ 예시 데이터 ═════════ */
-function demoData(){
-  const t=TODAY(),a=n=>addD(t,n);let k=0;const id=()=>"demo-"+(++k);
-  const T=(tt,d,s,p,y,r,extra)=>Object.assign({id:id(),t:tt,d,s:s||"시작 전",p,y,r,u:null},extra||{});
-  return {today:t,at:new Date().toISOString(),demo:true,
-    tasks:[T("예시) 주간 회의 자료 정리",a(-3),"대기","업무","문서"),T("예시) 로그인 오류 원인 찾기",a(-1),"진행 중","업무","버그","상"),
-      T("예시) 데모 빌드 올리기",a(1),null,"업무","기능","상"),T("예시) 설정 화면 글자 겹침 고치기",t,null,"업무","UI","중"),
-      T("예시) 저장 기능 점검",t,"완료","업무","기능","상",{star:true,out:"점검 12건 통과"}),T("예시) 회의록 정리",a(2),null,"업무","문서"),
-      T("예시) 운동 계획 세우기",a(5),null,"개인","기타","상"),T("[결정] 예시) 배포 방식 정하기",null,"대기","업무","서버","중"),
-      T("[결정] 예시) 여행 날짜 정하기",null,"대기","개인","기타","하"),T("예시) 책 한 권 읽기",a(-2),"완료","공부","기타",null,{star:true,out:"독서 노트 1건"})],
-    events:[{id:id(),t:"예시) 팀 회의",all:false,s:new Date(t+"T10:00:00").toISOString(),e:new Date(t+"T11:00:00").toISOString(),cal:"예시",color:"#5b7a99"},
-      {id:id(),t:"예시) 병원 예약",all:false,s:new Date(a(2)+"T14:00:00").toISOString(),e:new Date(a(2)+"T15:00:00").toISOString(),cal:"예시",color:"#9d92c4"}],
-    habits:[{id:id(),n:"물 마시기",i:"💧",g:7,on:true,dates:[a(-1),a(-2)].join(",")},{id:id(),n:"운동",i:"🏃",g:3,on:true,dates:a(-2)},{id:id(),n:"독서",i:"📖",g:5,on:true,dates:""}],memos:[{id:id(),t:"예시) 다음 주에 확인할 것 적어 두기",k:"아이디어",pin:true,at:new Date().toISOString()}],
-    jobs:[{id:id(),n:"예시) 어느 게임 회사",role:"클라이언트 프로그래머",st:"서류 준비",d:a(9),post:"Unity C# 클라이언트 개발, UI 구현, Steam 출시 경험 우대"}],docs:[],att:[{id:id(),t:"야근",type:"야근",d:a(-1),h:2,taxi:18000,paid:null,reason:"예시) 빌드 마감"},{id:id(),t:"연차",type:"연차",d:a(-6),days:1}],
-    months:[{id:t.slice(0,7),m:t.slice(0,7).replace("-","."),days:1,hours:2,used:1,taxi:18000,unpaid:18000}],leave:[{id:id(),y:t.slice(0,4),total:15,special:0,used:1,left:14}],mail:[{id:"dm1",subj:"예시) 채용 공고 안내",from:"어느 게임 회사",at:new Date().toISOString(),snip:"클라이언트 프로그래머를 모집합니다.",unread:true,star:false,n:1},{id:"dm2",subj:"예시) 주말 모임 안내",from:"친구",at:new Date(Date.now()-864e5).toISOString(),snip:"이번 주 토요일 몇 시에 볼까?",unread:false,star:true,n:2}],account:"me@example.com",news:[],logs:[],sorries:[]};
-}
-async function demoApi(action,args){
-  await new Promise(r=>setTimeout(r,150));
-  if(action==="load")return S.data;
-  if(action==="add")return Object.assign({id:"demo-"+Date.now()},args.fields);
-  if(action==="update")return Object.assign({},byId(S.data[{tasks:"tasks",habit:"habits",memo:"memos",att:"att",job:"jobs",doc:"docs"}[args.kind]]||[],args.id)||{},args.fields);
-  if(action==="habitToggle")return byId(S.data.habits,args.id);
-  if(action==="history")return demoHist().items;
-  if(action==="mailBody")return [{from:"예시",date:new Date().toISOString(),body:"예시 본문입니다."}];
-  if(action==="jobMail")return [];
-  if(action==="works")return {at:new Date().toISOString(),notes:[{p:"예시 프로젝트",s:"저장",t:"예시) 저장 순서 수정",d:TODAY(),path:"demo/a.md",sum:"저장이 뒤바뀌던 것을 고쳤다.",heads:["문제","원인","결정 과정","수정","확인","남은 문제"],imgs:["demo/a.svg"]},{p:"예시 프로젝트",s:"화면",t:"예시) 설정 화면 정리",d:addD(TODAY(),-1),path:"demo/b.md",sum:"글자가 겹치던 곳을 고쳤다.",heads:["동작","바뀐 파일"],imgs:[]}],imgs:["demo/a.svg","demo/따로 그린 구조.svg"],imgM:{}};
-  if(action==="docs")return {at:new Date().toISOString(),docs:[{path:"entities/예시 프로젝트/저장 순서 수정.md",links:["entities/예시 프로젝트/설정 화면 정리.md"],imgs:["demo/a.svg"]},
-    {path:"entities/예시 프로젝트/설정 화면 정리.md",links:[],imgs:[]},{path:"About Me/소개.md",links:["entities/예시 프로젝트/저장 순서 수정.md"],imgs:[]},{path:"log.md",links:[],imgs:[]}]};
-  if(action==="docNote")return demoApi("workNote",args);
-  if(action==="workImgs"){const one=await demoApi("workImg",{});return {imgs:Object.fromEntries((args.paths||[]).map(p=>[p,one]))}}
-  if(action==="workNote")return {text:"# 예시 노트\n\n![[a.svg]]\n\n## 문제\n저장한 값이 가끔 예전 값으로 돌아갔다.\n\n## 원인\n두 저장 요청이 겹치면 늦게 끝난 쪽이 이겼다.\n\n## 결정 과정\n잠금을 거는 안과 순서 번호를 붙이는 안을 견줬다. 잠금은 화면이 멈출 수 있어 **순서 번호**를 골랐다.\n\n## 수정\n- 요청마다 번호를 붙였다\n- 낮은 번호의 응답은 버린다\n\n## 확인\n| 잰 것 | 전 | 후 |\n|---|---|---|\n| 100번 저장 중 뒤바뀜 | 7번 | 0번 |\n\n## 남은 문제\n오프라인에서 쌓인 요청은 다루지 않았다.\n\n관련: [[설정 화면 정리]] · [[없는 노트]]\n"};
-  if(action==="workImg")return {mime:"image/svg+xml",b64:"PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA0MjAgMTIwIj48cmVjdCB3aWR0aD0iNDIwIiBoZWlnaHQ9IjEyMCIgZmlsbD0iI2ZmZiIvPjxyZWN0IHg9IjIwIiB5PSI0MCIgd2lkdGg9IjExMCIgaGVpZ2h0PSI0MCIgcng9IjYiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzMzMyIvPjx0ZXh0IHg9Ijc1IiB5PSI2NSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1zaXplPSIxMyI+7KCA7J6lIOyalOyyrTwvdGV4dD48cGF0aCBkPSJNMTMwIDYwaDcwIiBzdHJva2U9IiMzMzMiLz48cmVjdCB4PSIyMDAiIHk9IjQwIiB3aWR0aD0iMTEwIiBoZWlnaHQ9IjQwIiByeD0iNiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjYzAzOTJiIi8+PHRleHQgeD0iMjU1IiB5PSI2NSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1zaXplPSIxMyIgZmlsbD0iI2MwMzkyYiI+7Iic7IScIOqzoOyglTwvdGV4dD48cGF0aCBkPSJNMzEwIDYwaDUwIiBzdHJva2U9IiMzMzMiLz48dGV4dCB4PSIzODUiIHk9IjY1IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LXNpemU9IjEzIj7tjIzsnbw8L3RleHQ+PC9zdmc+"};
-  if(action==="pays")return [{id:"demo-pay",m:TODAY().slice(0,7).replace("-","."),d:TODAY(),g:3000000,ded:400000,net:2600000}];
-  if(action==="memoToTask")return {id:"demo-"+Date.now(),t:args.text,d:args.date,s:"시작 전"};
-  return {};
-}
 
 /* 시작: 저장된 화면 먼저, 옵시디언은 뒤에서 */
 S.focus=ls.get("desk:focus",false);
