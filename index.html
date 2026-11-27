@@ -2398,7 +2398,7 @@ function mailSheet(){
 
 /* ═════════ desk: 작업 — 볼트의 작업 노트를 프로젝트별로 보고, 넣어 둔 다이어그램과 캡처를 함께 본다. 읽기만 한다 ═════════ */
 // 노트 내용은 평소 읽기에 들어 있지 않다. 이 화면을 열 때 받아 와 여기에만 들고, 기기에 저장하지 않는다
-const libNew=()=>({idx:null,got:0,busy:false,err:null,p:"",s:"",q:"",stage:"",n:60,open:null,text:{},noteBusy:false,pk:"",pq:"",pn:24,pic:null});
+const libNew=()=>({idx:null,got:0,busy:false,err:null,p:"",s:"",cat:"",q:"",stage:"",n:60,open:null,text:{},noteBusy:false,pk:"",pq:"",pn:24,pic:null});
 S.lib=libNew();
 // 목록은 받은 지 2분이 지났을 때만 다시 받는다(PC가 2분마다 갱신하고, 바뀌었을 때만 파일을 쓴다). 다시 받는 동안에는 옛 목록을 그대로 보여 준다
 const LIST_TTL=12e4;
@@ -2423,6 +2423,21 @@ const stageOf=hd=>{const s=WSTAGES.find(x=>new RegExp(x[1],"i").test(hd));return
 const stageCol=k=>(WSTAGES.find(x=>x[0]===k)||[])[2]||"var(--gray)";
 const isCap=p=>/\.(png|jpe?g|gif|webp)$/i.test(p);
 const mdPlain=s=>s.replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g,"$2").replace(/\[\[([^\]]+)\]\]/g,"$1").replace(/\*\*([^*]+)\*\*/g,"$1").replace(/`([^`]+)`/g,"$1").replace(/\[([^\]]+)\]\([^)]+\)/g,"$1");
+// desk: 노트 카테고리 — 폴더(프로젝트·시스템)와 겹치지 않게 「무슨 종류의 노트인가」로 가른다. 위에서부터 처음 맞는 것.
+// 제목과 폴더만 본다(작업 탭과 문서 탭에서 같은 노트가 같은 카테고리가 되게). 2026-11-27 볼트 노트 509개에 돌려 「기타」가 한 자리 수가 되게 맞췄다
+const NCATS=[
+  ["경력·나",p=>/^(career|About Me)\//.test(p)],
+  ["시험·검증",(p,t)=>/\/Capture-Tests\//.test(p)||/시험|테스트|QA|검증|재현|검수|검사/i.test(t)],
+  ["작업 기록",(p,t)=>/\/Work-Log\//.test(p)||p==="log.md"||/기록|로그|아카이브|일지|회고|업무 체크/.test(t)],
+  ["버그·원인",(p,t)=>/버그|원인|문제|오류|에러|멈춤|안 됨|안됨|실패|깨짐|누락|사고|되돌림|유실|유령|429/.test(t)],
+  ["조사·분석",(p,t)=>/조사|분석|진단|차이|점검|비교|현황|정체|위험|비용/.test(t)],
+  ["설계·계획",(p,t)=>/설계|계획|검토|제안|시안|마일스톤|일정|체크리스트|절차|방법론|표준|원칙|규칙|컨벤션|기획|논의|상한/.test(t)],
+  ["구현",(p,t)=>/\/구현기록\//.test(p)||/구현|추가|연동|리팩토링|수정|개선|분리|이관|적용|마이그레이션|교체|전환|자동|켜고|이어하기|우선순위|통합|방어|숨기기|치트|툴팁|현지화|반영|빌드|제어|이전|UI\b/i.test(t)],
+  ["구조·참고",(p,t)=>/^(raw|queries)\//.test(p)||p==="SCHEMA.md"||/^entities\/(Core|CoreLibrary|dcc|tged|tbh)\//.test(p)||
+    /아키텍처|개요|구조|구성|규격|시스템|흐름|MOC|index|목록|지도|스택|패턴|라이브러리|매핑|생성기|시트|테이블|데이터|원리|인수인계|인계|매뉴얼|해석|이해|역할|파이프라인|API|계약|자료|리스트|수식|정리|동작|프롬프트|BRIEF|용어|코드 표/i.test(t)]];
+const NCAT_ORDER=[...NCATS.map(c=>c[0]),"기타"];
+const noteCat=(p,title)=>{const t=title||p.split("/").pop().replace(/\.md$/i,"");return (NCATS.find(([,f])=>f(p,t))||["기타"])[0]};
+const catSel=(id,label,opts,val,on)=>h("select",{class:"in",id,"aria-label":label,onchange:e=>on(e.target.value)},opts.map(([v,nm])=>h("option",{value:v,selected:v===val?"selected":null},nm)));
 function viewLib(){
   libLoad();const L=S.lib;
   if(L.err)return [h("div",{class:"banner"},"작업 목록을 읽지 못했습니다: "+L.err," ",h("button",{class:"btn sm",onclick:()=>libLoad(true)},"다시 시도"))];
@@ -2431,25 +2446,32 @@ function viewLib(){
   if(L.open){const o=all.find(x=>x.path===L.open);if(o)return libNote(o)}
   const projs=[...new Set(all.map(x=>x.p))].map(p=>[p,all.filter(x=>x.p===p).length]).sort((a,b)=>b[1]-a[1]);
   const inP=all.filter(x=>!L.p||x.p===L.p),syss=[...new Set(inP.map(x=>x.s).filter(Boolean))].sort(),q=L.q.trim().toLowerCase();
-  const list=inP.filter(x=>(!L.s||x.s===L.s)&&(!L.stage||x.heads.some(hd=>stageOf(hd)===L.stage))&&(!q||(x.t+" "+x.sum+" "+x.s).toLowerCase().includes(q)));
+  const sort=ls.get("desk:libSort","date"),catOf=x=>x.cat||(x.cat=noteCat(x.path,x.t)); // 카테고리는 노트마다 한 번만 센다
+  let list=inP.filter(x=>(!L.s||x.s===L.s)&&(!L.cat||catOf(x)===L.cat)&&(!L.stage||x.heads.some(hd=>stageOf(hd)===L.stage))&&(!q||(x.t+" "+x.sum+" "+x.s).toLowerCase().includes(q)));
+  if(sort==="cat")list=list.slice().sort((a,b)=>NCAT_ORDER.indexOf(catOf(a))-NCAT_ORDER.indexOf(catOf(b))); // 같은 카테고리 안은 날짜순 그대로(안정 정렬)
+  else if(sort==="name")list=list.slice().sort((a,b)=>a.t.localeCompare(b.t,"ko"));
   const cnt=k=>list.reduce((s,x)=>s+x.imgs.filter(p=>isCap(p)===k).length,0);
   const st=WSTAGE_ORDER.map(k=>[k,inP.filter(x=>x.heads.some(hd=>stageOf(hd)===k)).length]),mx=Math.max(1,...st.map(x=>x[1]));
   const set=o=>{Object.assign(L,o,{n:60});render()};
   const bar=h("div",{class:"row"},
     h("div",{class:"seg",role:"group","aria-label":"프로젝트"},[["","전체",all.length],...projs.map(([p,c])=>[p,p,c])].map(([k,nm,c])=>h("button",{"aria-pressed":String(L.p===k),onclick:()=>set({p:k,s:""})},nm+" "+c))),
     syss.length?sel("lib-s","시스템 전체",syss,L.s,v=>set({s:v})):null,
+    catSel("lib-cat","카테고리",[["","카테고리 전체"],...NCAT_ORDER.map(c=>[c,c+" "+inP.filter(x=>catOf(x)===c).length])],L.cat||"",v=>set({cat:v})),
+    catSel("lib-sort","정렬",[["date","날짜순"],["cat","카테고리순"],["name","이름순"]],sort,v=>{ls.set("desk:libSort",v);set({})}),
     h("input",{class:"in grow",id:"lib-q",type:"search",placeholder:"작업 검색 (제목·요약)",value:L.q,style:"max-width:280px",oninput:e=>{L.q=e.target.value;L.n=60;clearTimeout(wqT);wqT=setTimeout(render,250)}}),
-    (L.p||L.s||L.q||L.stage)?h("button",{class:"btn ghost",onclick:()=>set({p:"",s:"",q:"",stage:""})},"필터 지우기"):null);
+    (L.p||L.s||L.q||L.stage||L.cat)?h("button",{class:"btn ghost",onclick:()=>set({p:"",s:"",q:"",stage:"",cat:""})},"필터 지우기"):null);
   const kp=h("div",{class:"kpis"},kpi("노트",list.length,"건",L.idx.at?"목록 "+agoTxt(L.idx.at)+" 기준":""),kpi("다이어그램",cnt(false),"장","노트에 넣은 SVG"),kpi("캡처",cnt(true),"장","노트에 넣은 화면"));
   const stC=card("기록에 드러난 단계",{icon:"today",count:"누르면 그 단계가 있는 노트만"},h("div",{class:"bars"},st.map(([k,v])=>h("button",{class:"hbar",style:"border:0;background:transparent;color:inherit;text-align:left;cursor:pointer;width:100%;opacity:"+(L.stage&&L.stage!==k?".45":"1"),"aria-pressed":String(L.stage===k),onclick:()=>set({stage:L.stage===k?"":k})},
       h("span",null,k),h("span",{class:"tr"},h("i",{style:"width:"+(v/mx*100)+"%;background:"+stageCol(k)})),h("b",null,v)))),
     h("div",{class:"faint",style:"font-size:12px"},"노트의 절 제목(「원인」, 「결정 과정」, 「확인」, 「남은 문제」 등)으로 센 것입니다. 적지 않은 것은 세지 않습니다."));
   const listC=card("작업 노트",{icon:"news",count:list.length+"건"},
-    list.length?h("div",{style:"min-width:0;overflow:hidden"},list.slice(0,L.n).map(x=>{const d=x.imgs.filter(p=>!isCap(p)).length,c=x.imgs.length-d,sg=[...new Set(x.heads.map(stageOf).filter(Boolean))];
-      return h("button",{class:"lrow",onclick:()=>{L.open=x.path;render();$("#scroll").scrollTop=0}},h("b",null,x.t),
-        h("small",null,[x.d,x.p,x.s,d?"다이어그램 "+d:null,c?"캡처 "+c:null].filter(Boolean).join(" · ")),
+    list.length?h("div",{style:"min-width:0;overflow:hidden"},list.slice(0,L.n).map((x,i,arr)=>{const d=x.imgs.filter(p=>!isCap(p)).length,c=x.imgs.length-d,sg=[...new Set(x.heads.map(stageOf).filter(Boolean))];
+      // 카테고리순이면 카테고리가 바뀌는 자리에 소제목
+      const sec=sort==="cat"&&(i===0||catOf(arr[i-1])!==catOf(x))?h("div",{class:"sec-t"},catOf(x)+" · "+list.filter(y=>catOf(y)===catOf(x)).length+"건"):null;
+      return [sec,h("button",{class:"lrow",onclick:()=>{L.open=x.path;render();$("#scroll").scrollTop=0}},h("b",null,x.t),
+        h("small",null,[x.d,x.p,x.s,catOf(x),d?"다이어그램 "+d:null,c?"캡처 "+c:null].filter(Boolean).join(" · ")),
         x.sum?h("span",{class:"s"},mdPlain(x.sum)):null,
-        sg.length?h("small",null,WSTAGE_ORDER.filter(k=>sg.includes(k)).map(k=>h("span",{class:"tag",style:"margin-right:6px"},h("i",{style:"background:"+stageCol(k)}),k))):null)})):h("div",{class:"empty"},"조건에 맞는 노트가 없습니다"),
+        sg.length?h("small",null,WSTAGE_ORDER.filter(k=>sg.includes(k)).map(k=>h("span",{class:"tag",style:"margin-right:6px"},h("i",{style:"background:"+stageCol(k)}),k))):null)]})):h("div",{class:"empty"},"조건에 맞는 노트가 없습니다"),
     list.length>L.n?h("button",{class:"btn",onclick:()=>{L.n+=60;render()}},"더 보기 ("+(list.length-L.n)+"건 남음)"):null);
   return [bar,kp,h("div",{class:"grid g-today"},listC,h("div",{class:"stack"},stC))];
 }
@@ -2625,11 +2647,19 @@ const docTitle=p=>p.split("/").pop().replace(/\.md$/i,"");
 const docCount=n=>n.files.length+Object.values(n.dirs).reduce((s,x)=>s+docCount(x),0);
 function openDoc(p){DOCS.open=p;S.view="docs";ls.set("desk:view","docs");
   const ps=p.split("/");for(let i=1;i<ps.length;i++)DOCS.fold[ps.slice(0,i).join("/")]=true; // 나무에서 그 노트가 보이게 위 폴더를 편다
+  DOCS.fold["cat:"+noteCat(p)]=true; // 카테고리별로 볼 때는 그 카테고리를 편다
   render();$("#scroll").scrollTop=0}
 function docTree(){
   const D=DOCS,q=D.q.trim().toLowerCase(),docs=D.idx.docs;
   if(q){const hit=docs.filter(d=>d.path.toLowerCase().includes(q)).slice(0,200);
     return hit.length?hit.map(d=>h("button",{class:"dnav"+(D.open===d.path?" on":""),title:d.path,onclick:()=>openDoc(d.path)},h("b",null,docTitle(d.path)),h("small",null,d.path.split("/").slice(0,-1).join("/")))):h("div",{class:"empty"},"맞는 노트가 없습니다")}
+  if(ls.get("desk:docGroup","folder")==="cat"){
+    // 카테고리별: 맨 위 갈래가 카테고리, 펼치면 노트(이름 옆에 폴더를 작게)
+    const by={};docs.forEach(d=>{const c=d.cat||(d.cat=noteCat(d.path));(by[c]=by[c]||[]).push(d.path)});
+    return NCAT_ORDER.filter(c=>by[c]).flatMap(c=>{const open=!!D.fold["cat:"+c];
+      return [h("button",{class:"dnav f","aria-expanded":String(open),onclick:()=>{D.fold["cat:"+c]=!open;render()}},h("span",{class:"car"},open?"▾":"▸"),h("b",null,c),h("small",null,by[c].length)),
+        ...(open?by[c].sort((a,b)=>docTitle(a).localeCompare(docTitle(b),"ko")).map(p=>h("button",{class:"dnav"+(D.open===p?" on":""),style:"padding-left:22px",title:p,onclick:()=>openDoc(p)},
+          h("b",null,docTitle(p)),h("small",null,p.split("/").slice(0,-1).join("/").replace(/^entities\//,"")))):[])]})}
   const root={dirs:{},files:[]};
   docs.forEach(d=>{const ps=d.path.split("/");let n=root;ps.slice(0,-1).forEach(s=>{n=n.dirs[s]=n.dirs[s]||{dirs:{},files:[]}});n.files.push(d.path)});
   const rows=[],walk=(n,base,depth)=>{
@@ -2643,7 +2673,9 @@ function viewDocs(){
   if(D.err)return [h("div",{class:"banner"},"문서 목록을 읽지 못했습니다: "+D.err," ",h("button",{class:"btn sm",onclick:()=>docsLoad(true)},"다시 시도"))];
   if(!D.idx)return [h("div",{class:"empty"},"문서 목록을 불러오는 중…")];
   const side=h("aside",{class:"dside"},
-    h("input",{class:"in",id:"doc-q",type:"search",placeholder:"노트 이름·폴더 검색",value:D.q,"aria-label":"노트 이름·폴더 검색",oninput:e=>{D.q=e.target.value;clearTimeout(wqT);wqT=setTimeout(render,200)}}),
+    h("div",{class:"row"},
+      h("input",{class:"in grow",id:"doc-q",type:"search",placeholder:"노트 이름·폴더 검색",value:D.q,"aria-label":"노트 이름·폴더 검색",oninput:e=>{D.q=e.target.value;clearTimeout(wqT);wqT=setTimeout(render,200)}}),
+      catSel("doc-group","나무 갈래",[["folder","폴더별"],["cat","카테고리별"]],ls.get("desk:docGroup","folder"),v=>{ls.set("desk:docGroup",v);render()})),
     h("div",{class:"dtree"},docTree()),
     h("div",{class:"row",style:"font-size:11.5px"},h("span",{class:"faint"},D.idx.docs.length+"개 노트 · 목록 마지막 변경 "+agoTxt(D.idx.at)),
       h("button",{class:"btn ghost sm",style:"margin-left:auto",disabled:D.busy,title:"PC가 2분마다 목록을 갱신합니다",onclick:()=>{docsLoad(true);render()}},ic("refresh"),D.busy?"불러오는 중":"새로 고침")));
