@@ -13,7 +13,7 @@
  */
 
 const TZ = 'Asia/Seoul';
-const VERSION = '2026-11-27b';
+const VERSION = '2026-11-27c';
 const WORK_FILE = '작업 목록.json';   // PC의 tools/sync-vault.js가 쓰는 파일. 서버는 읽기만 한다
 const GIT_FILE = '작업 내역.md';   // PC의 tools/sync-git.js가 쓰는 파일. 서버는 읽기만 한다
 // 지원 서류: PC의 portfolio 저장소 build.js가 desk 폴더에 쓰는 한 파일짜리 문서들. 서버는 이 이름들만, 읽기만 한다
@@ -212,9 +212,12 @@ function ocr_(url) {
   }
 }
 
-/** 작업 목록에 적힌 그림 하나를 읽는다. 목록 밖 경로와 그림이 아닌 파일은 거절한다(드라이브의 다른 파일을 읽는 길이 되지 않게). */
-function workImg_(idx, folder, path) {
-  if ((idx.imgs || []).indexOf(path) < 0 && !idx.notes.some(function (n) { return (n.imgs || []).indexOf(path) >= 0; })) throw new Error('작업 목록에 없는 그림입니다');
+/**
+ * 볼트의 그림 하나를 읽는다. PC 목록이 훑는 폴더(entities, career) 아래의 그림 파일만 읽는다(드라이브의 다른 파일을 읽는 길이 되지 않게).
+ * 예전에는 요청마다 작업 목록 파일 전체를 읽어 대조했는데, 그 파일이 커지면서 그림 한 묶음마다 몇 초씩 더 걸려 경로 규칙으로 바꿨다.
+ */
+function workImg_(folder, path) {
+  if (!/^(entities|career)\//.test(path) || path.split('/').some(function (s) { return s === '..' || s === '.' || s === ''; })) throw new Error('작업 목록에 없는 그림입니다');
   const ext = path.split('.').pop().toLowerCase();
   const mime = { svg: 'image/svg+xml', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp' }[ext];
   if (!mime) throw new Error('그림 파일이 아닙니다');
@@ -433,18 +436,18 @@ const ACTIONS = {
 
   /** 그림 하나. 작업 목록에 적힌 그림(노트가 쓰는 것, 또는 PC가 훑은 그림 목록)일 때만 읽는다. */
   workImg: function (a, folder) {
-    return workImg_(workIndex_(folder), folder, String(a.path || ''));
+    return workImg_(folder, String(a.path || ''));
   },
 
   /** 그림 여러 장을 한 번에(요청 한 번에 드는 시간이 길어서 묶는다). 한 장이 실패해도 나머지는 준다. */
   workImgs: function (a, folder) {
-    const idx = workIndex_(folder), out = {};
+    const out = {};
     let total = 0;
     (Array.isArray(a.paths) ? a.paths : []).slice(0, 8).forEach(function (p) {
       p = String(p);
       try {
         if (total > 20 * 1024 * 1024) throw new Error('한 번에 받을 양을 넘었습니다');
-        out[p] = workImg_(idx, folder, p); total += out[p].b64.length;
+        out[p] = workImg_(folder, p); total += out[p].b64.length;
       } catch (e) { out[p] = { err: e.message }; }
     });
     return { imgs: out };

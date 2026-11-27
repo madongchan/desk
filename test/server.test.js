@@ -350,18 +350,20 @@ assert.match(post('workNote', { path: 'entities/게임/목록에 없는 노트.m
 assert.match(post('workNote', { path: '../desk/급여.md' }).error, /목록에 없는/);
 r = post('workImg', { path: 'entities/게임/Docs/구조.svg' });
 assert.deepStrictEqual([r.data.mime, Buffer.from(r.data.b64, 'base64').toString()], ['image/svg+xml', '<svg/>']);
-assert.match(post('workImg', { path: 'entities/게임/저장 수정.md' }).error, /목록에 없는/);       // 노트를 그림으로 읽을 수 없다
+assert.match(post('workImg', { path: 'entities/게임/저장 수정.md' }).error, /그림 파일이 아닙니다/);   // 노트를 그림으로 읽을 수 없다
+assert.match(post('workImg', { path: 'desk/급여.png' }).error, /목록에 없는/);                    // 볼트의 entities, career 밖은 읽지 않는다
+assert.match(post('workImg', { path: 'entities/../desk/급여.png' }).error, /목록에 없는/);
 assert.deepStrictEqual(post('works', {}).data.imgs, []);                                            // 그림 목록이 없던 옛 파일도 읽는다
 // 그림 탭: 노트에 넣지 않은 그림도 PC가 적은 그림 목록에 있으면 읽어 준다
 wk.getFoldersByName('Docs').next().createFile('따로 그린 것.svg', '<svg id="b"/>');
 idx.setContent(JSON.stringify(Object.assign(JSON.parse(idx.getBlob().getDataAsString()), { imgs: ['entities/게임/Docs/구조.svg', 'entities/게임/Docs/따로 그린 것.svg'] })));
 assert.deepStrictEqual(post('works', {}).data.imgs, ['entities/게임/Docs/구조.svg', 'entities/게임/Docs/따로 그린 것.svg']);
 assert.strictEqual(Buffer.from(post('workImg', { path: 'entities/게임/Docs/따로 그린 것.svg' }).data.b64, 'base64').toString(), '<svg id="b"/>');
-assert.match(post('workImg', { path: 'entities/게임/목록에 없는 노트.md' }).error, /목록에 없는/);
+assert.match(post('workImg', { path: 'entities/게임/목록에 없는 노트.md' }).error, /그림 파일이 아닙니다/);
 // 여러 장 한 번에: 받을 수 있는 것은 주고, 목록 밖은 그 장만 거절한다
 r = post('workImgs', { paths: ['entities/게임/Docs/구조.svg', 'entities/게임/목록에 없는 노트.md', 'entities/게임/Docs/따로 그린 것.svg'] }).data.imgs;
 assert.deepStrictEqual([Buffer.from(r['entities/게임/Docs/구조.svg'].b64, 'base64').toString(), r['entities/게임/Docs/따로 그린 것.svg'].mime], ['<svg/>', 'image/svg+xml']);
-assert.match(r['entities/게임/목록에 없는 노트.md'].err, /목록에 없는/);
+assert.match(r['entities/게임/목록에 없는 노트.md'].err, /그림 파일이 아닙니다/);
 assert.strictEqual(Object.keys(post('workImgs', { paths: Array(20).fill('entities/게임/Docs/구조.svg').map((p, i) => p + i) }).data.imgs).length, 8);   // 한 번에 8장까지
 assert.deepStrictEqual(post('workImgs', {}).data.imgs, {});
 root._files.splice(root._files.indexOf(idx), 1);
