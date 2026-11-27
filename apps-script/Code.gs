@@ -13,7 +13,7 @@
  */
 
 const TZ = 'Asia/Seoul';
-const VERSION = '2026-11-27d';
+const VERSION = '2026-11-27e';
 const WORK_FILE = '작업 목록.json';   // PC의 tools/sync-vault.js가 쓰는 파일. 서버는 읽기만 한다
 const DOC_FILE = '문서 목록.json';    // 문서 탭: 같은 프로그램이 볼트 전체를 훑어 쓴다(노트 경로와 노트끼리의 링크)
 const GIT_FILE = '작업 내역.md';   // PC의 tools/sync-git.js가 쓰는 파일. 서버는 읽기만 한다
@@ -239,11 +239,21 @@ function vaultOk_(folder, path) {
 
 /** PC가 만든 작업 목록을 읽는다. */
 function workIndex_(folder) {
-  const text = readText_(folder, WORK_FILE);
-  if (!text) throw new Error('작업 목록이 없습니다. PC에서 tools/sync-vault.js를 돌려 주세요');
-  const idx = JSON.parse(text);
+  const got = readList_(folder, WORK_FILE);
+  if (!got.text) throw new Error('작업 목록이 없습니다. PC에서 tools/sync-vault.js를 돌려 주세요');
+  const idx = JSON.parse(got.text);
   if (!idx || !Array.isArray(idx.notes)) throw new Error('작업 목록 파일의 모양이 잘못되었습니다');
+  idx.ver = got.ver;
   return idx;
+}
+
+/**
+ * PC가 쓴 목록 파일의 글과 드라이브에서 고친 시각(ver). PC는 목록이 바뀌었을 때만 파일을 쓰므로 ver가 곧 목록의 판이다.
+ * 화면은 listVer로 ver만 물어 보고, 바뀌었을 때만 목록을 다시 받는다.
+ */
+function readList_(folder, name) {
+  const f = findFile_(folder, name);
+  return f ? { text: f.getBlob().getDataAsString('UTF-8'), ver: f.getLastUpdated().toISOString() } : { text: null, ver: '' };
 }
 
 /** 볼트 폴더. 데이터 폴더(desk)의 바로 위다. */
@@ -434,7 +444,13 @@ const ACTIONS = {
   works: function (a, folder) {
     const idx = workIndex_(folder);
     return { at: idx.at, notes: idx.notes.map(function (n) { const o = Object.assign({}, n); delete o.m; delete o.z; return o; }),   // m, z는 PC 프로그램만 쓰는 값
-      imgs: idx.imgs || [], imgM: idx.imgM || {} };   // 그림 탭: 노트에 넣지 않은 그림까지. imgM은 그림을 고친 시각(화면 캐시가 낡았는지 가린다)
+      imgs: idx.imgs || [], imgM: idx.imgM || {}, ver: idx.ver };   // 그림 탭: 노트에 넣지 않은 그림까지. imgM은 그림을 고친 시각(화면 캐시가 낡았는지 가린다)
+  },
+
+  /** 작업 목록과 문서 목록의 판(드라이브에서 고친 시각)만. 화면이 몇십 초마다 물어 바뀌었을 때만 목록을 다시 받는다. 파일을 읽지 않아 가볍다. */
+  listVer: function (a, folder) {
+    const ver = function (name) { const f = findFile_(folder, name); return f ? f.getLastUpdated().toISOString() : ''; };
+    return { works: ver(WORK_FILE), docs: ver(DOC_FILE) };
   },
 
   /** 노트 하나의 글(작업 탭, 문서 탭). 볼트의 .md만, 데이터 폴더와 숨김 폴더는 빼고 읽는다(vaultOk_). 읽기만 한다. */
@@ -449,11 +465,11 @@ const ACTIONS = {
 
   /** 문서 탭의 목록. PC의 tools/sync-vault.js가 볼트 전체를 훑어 만든 파일에서 경로와 링크만 준다. */
   docs: function (a, folder) {
-    const text = readText_(folder, DOC_FILE);
-    if (!text) throw new Error('문서 목록이 없습니다. PC에서 tools/sync-vault.js를 돌려 주세요');
-    const idx = JSON.parse(text);
+    const got = readList_(folder, DOC_FILE);
+    if (!got.text) throw new Error('문서 목록이 없습니다. PC에서 tools/sync-vault.js를 돌려 주세요');
+    const idx = JSON.parse(got.text);
     if (!idx || !Array.isArray(idx.docs)) throw new Error('문서 목록 파일의 모양이 잘못되었습니다');
-    return { at: idx.at, docs: idx.docs.map(function (d) { return { path: d.path, links: d.links || [], imgs: d.imgs || [] }; }) };
+    return { at: idx.at, ver: got.ver, docs: idx.docs.map(function (d) { return { path: d.path, links: d.links || [], imgs: d.imgs || [] }; }) };
   },
 
   /** 그림 하나. 작업 목록에 적힌 그림(노트가 쓰는 것, 또는 PC가 훑은 그림 목록)일 때만 읽는다. */

@@ -355,8 +355,13 @@ assert.match(post('docNote', { path: 'entities/게임/Docs/구조.svg' }).error,
 // 문서 목록: PC가 쓴 파일에서 경로, 링크, 그림만 준다
 assert.match(post('docs', {}).error, /문서 목록이 없습니다/);
 const dfile = root.createFile('문서 목록.json', JSON.stringify({ at: 'T', docs: [{ path: 'entities/게임/저장 수정.md', m: 1, z: 2, refs: ['구조.svg'], links: [], imgs: ['entities/게임/Docs/구조.svg'] }] }));
-assert.deepStrictEqual(post('docs', {}).data, { at: 'T', docs: [{ path: 'entities/게임/저장 수정.md', links: [], imgs: ['entities/게임/Docs/구조.svg'] }] });
+assert.deepStrictEqual(post('docs', {}).data, { at: 'T', ver: new Date(0).toISOString(), docs: [{ path: 'entities/게임/저장 수정.md', links: [], imgs: ['entities/게임/Docs/구조.svg'] }] });
+// 목록의 판: 파일을 읽지 않고 드라이브에서 고친 시각만 준다. 목록 파일이 없으면 빈 글자
+dfile.getLastUpdated = () => new Date('2026-11-27T07:40:00Z');
+dfile.getBlob = () => { throw new Error('판만 물을 때는 글을 읽지 않는다'); };
+assert.deepStrictEqual(post('listVer', {}).data, { works: new Date(0).toISOString(), docs: '2026-11-27T07:40:00.000Z' });
 root._files.splice(root._files.indexOf(dfile), 1);
+assert.strictEqual(post('listVer', {}).data.docs, '');
 r = post('workImg', { path: 'entities/게임/Docs/구조.svg' });
 assert.deepStrictEqual([r.data.mime, Buffer.from(r.data.b64, 'base64').toString()], ['image/svg+xml', '<svg/>']);
 assert.match(post('workImg', { path: 'entities/게임/저장 수정.md' }).error, /그림 파일이 아닙니다/);   // 노트를 그림으로 읽을 수 없다

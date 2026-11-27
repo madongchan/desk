@@ -211,6 +211,11 @@ const { wikiRefs, resolver } = require('../tools/sync-vault.js');
 assert.deepStrictEqual(wikiRefs('[[가]] [[나|별칭]] ![[그림.png|300]] [[다#절]] [[가]] [[라^블록]] `[[코드]]`'), ['가', '나', '그림.png', '다', '라', '코드']);
 const rs = resolver(['entities/게임/가.md', '가.md', 'entities/게임/Docs/그림.png', 'career/나.md']);
 assert.deepStrictEqual(['가', 'entities/게임/가', '나', 'NA'.toLowerCase(), '그림.png', '없는 것'].map(rs), ['가.md', 'entities/게임/가.md', 'career/나.md', null, 'entities/게임/Docs/그림.png', null]);
+// 볼트 감시: 노트와 그림만, 데이터 폴더·숨김 폴더·graphify-out은 거른다(데이터 폴더를 안 거르면 목록을 쓸 때마다 다시 돈다)
+const { skip } = require('../tools/watch-vault.js');
+[['entities\\wpc\\a.md', false], ['entities\\wpc\\Diagrams\\56-x.svg', false], ['log.md', false], ['desk\\작업 목록.json', true], ['desk\\할 일.md', true],
+  ['.obsidian\\workspace.json', true], ['entities\\.git\\x.md', true], ['graphify-out\\a.md', true], ['entities\\a.tmp', true]]
+  .forEach(([n, want]) => assert.strictEqual(skip(n, 'desk'), want, n));
 nt = describe('entities/도구/메모 (2026-09-02).md', '글\n', {});
 assert.deepStrictEqual([nt.p, nt.s, nt.t, nt.d], ['도구', '', '메모 (2026-09-02)', '2026-09-02']);
 

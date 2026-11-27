@@ -2403,7 +2403,17 @@ S.lib=libNew();
 // 목록은 받은 지 2분이 지났을 때만 다시 받는다(PC가 2분마다 갱신하고, 바뀌었을 때만 파일을 쓴다). 다시 받는 동안에는 옛 목록을 그대로 보여 준다
 const LIST_TTL=12e4;
 function libLoad(force){const L=S.lib;if(L.busy||(((L.idx&&Date.now()-L.got<LIST_TTL)||L.err)&&!force))return;L.busy=true;L.err=null;
-  api("works",{}).then(r=>{L.idx=r;L.got=Date.now()}).catch(e=>{L.err=e.message}).finally(()=>{L.busy=false;if(S.view==="lib"||S.view==="pics")render()})}
+  api("works",{}).then(r=>{L.idx=r;L.got=Date.now();if(!S.demo)imgPrefetchSoon()}).catch(e=>{L.err=e.message}).finally(()=>{L.busy=false;if(S.view==="lib"||S.view==="pics")render()})}
+// desk: 목록이 바뀌었나만 묻기. 서버는 브라우저에 먼저 알려 줄 수 없어서, 작업·그림·문서 탭이 열려 있고 창이 보일 때
+// 20초마다 목록의 판(드라이브에서 고친 시각)만 묻는다. 바뀌었으면 그 목록만 다시 받는다(PC는 볼트가 바뀌면 바로 목록을 다시 쓴다)
+let verT=0;
+function listWatch(){clearTimeout(verT);verT=setTimeout(async()=>{
+  if(!S.demo&&S.data&&["lib","pics","docs"].includes(S.view)&&document.visibilityState==="visible"){
+    try{const v=await api("listVer",{});
+      if(S.lib.idx&&v.works&&v.works!==S.lib.idx.ver)libLoad(true);
+      if(DOCS.idx&&v.docs&&v.docs!==DOCS.idx.ver)docsLoad(true)}catch{/* 다음 차례에 다시 묻는다 */}}
+  listWatch()},2e4)}
+listWatch();
 // 절 제목으로 그 절이 작업의 어느 단계인지 가른다. 노트에 적힌 것만 쓰고 지어내지 않는다.
 // 앞에 있는 것이 먼저다(「남은 문제」는 문제가 아니라 남은 것이다)
 const WSTAGES=[["남은 것","남은|한계|미수정|todo|learned|배운","var(--gray)"],["판단","결정|판단|검토|대안|선택|방향|버린","var(--orange)"],["원인","원인|조사|분석|진단","var(--yellow)"],

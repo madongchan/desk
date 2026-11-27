@@ -77,6 +77,11 @@ function walkDocs(rel, skipTop, acc) {
   return acc;
 }
 
+/** 폴더를 훑은 뒤 읽기 전에 지워진 파일은 건너뛴다(볼트 감시가 지우는 도중에 돌릴 수 있다). 다른 오류는 그대로 낸다. */
+function gone(fn) {
+  try { return fn(); } catch (e) { if (e.code === 'ENOENT') return null; throw e; }
+}
+
 /**
  * 내용이 바뀌었을 때만 쓴다(at은 마지막으로 바뀐 시각). 예약 작업이 2분마다 돌아도 드라이브에 같은 파일을 다시 올리지 않게.
  * 같은 데이터는 JSON.stringify 결과도 같다(키 순서를 이 프로그램이 정한다).
@@ -100,7 +105,7 @@ if (require.main === module) {
   const imageByName = {};
   files.filter(f => IMG.test(f)).forEach(f => { imageByName[f.split('/').pop().toLowerCase()] = f; imageByName[f.toLowerCase()] = f; });
   let read = 0;
-  const notes = files.filter(f => /\.md$/i.test(f) && !SKIP.test(f)).map(rel => {
+  const notes = files.filter(f => /\.md$/i.test(f) && !SKIP.test(f)).map(rel => gone(() => {
     const st = fs.statSync(path.join(vault, rel)), m = Math.floor(st.mtimeMs), prev = old[rel];
     // 그림이 새로 생겼을 수 있으니, 지난번에 못 찾은 그림이 없던 노트만 다시 쓴다
     if (prev && prev.m === m && prev.z === st.size && prev.imgs.every(i => files.includes(i))) return prev;
@@ -108,12 +113,12 @@ if (require.main === module) {
     const n = describe(rel, fs.readFileSync(path.join(vault, rel), 'utf8'), imageByName);
     if (!n.d) n.d = new Date(st.mtimeMs + 9 * 3600e3).toISOString().slice(0, 10);   // 날짜가 없으면 고친 날(서울)
     return Object.assign(n, { m, z: st.size });
-  }).sort((a, b) => (a.d < b.d ? 1 : a.d > b.d ? -1 : a.path < b.path ? -1 : 1));
+  })).filter(Boolean).sort((a, b) => (a.d < b.d ? 1 : a.d > b.d ? -1 : a.path < b.path ? -1 : 1));
   // 그림 탭은 노트에 넣지 않은 그림까지 보여 준다. 서버는 이 목록에 있는 그림만 읽어 준다
-  const imgs = files.filter(f => IMG.test(f)).sort();
-  // 그림을 고친 시각. 화면은 이 값이 같으면 기기에 받아 둔 그림을 다시 쓰고, 다르면 새로 받는다
+  // 그림을 고친 시각(imgM). 화면은 이 값이 같으면 기기에 받아 둔 그림을 다시 쓰고, 다르면 새로 받는다
   const imgM = {};
-  imgs.forEach(f => { imgM[f] = Math.floor(fs.statSync(path.join(vault, f)).mtimeMs); });
+  files.filter(f => IMG.test(f)).forEach(f => gone(() => { imgM[f] = Math.floor(fs.statSync(path.join(vault, f)).mtimeMs); }));
+  const imgs = Object.keys(imgM).sort();
   const wrote = writeIfChanged(out, { notes, imgs, imgM });
   console.log(`작업 목록 ${notes.length}건, 그림 ${imgs.length}장(새로 읽은 노트 ${read}건): ${wrote ? '바뀌어 적었다' : '그대로라 안 적었다'}`);
 
@@ -124,13 +129,13 @@ if (require.main === module) {
   try { JSON.parse(fs.readFileSync(docOut, 'utf8')).docs.forEach(d => { oldDocs[d.path] = d; }); } catch (e) { /* 처음이면 전부 읽는다 */ }
   const everything = walkDocs('', dataTop, []), resolve = resolver(everything);
   let dread = 0;
-  const docs = everything.filter(f => /\.md$/i.test(f)).sort().map(rel => {
+  const docs = everything.filter(f => /\.md$/i.test(f)).sort().map(rel => gone(() => {
     const st = fs.statSync(path.join(vault, rel)), m = Math.floor(st.mtimeMs), prev = oldDocs[rel];
     // 글이 그대로면 지난번에 뽑은 이름(refs)을 다시 쓰고, 경로 풀기만 새로 한다(그 사이 생긴 노트를 가리킬 수 있다)
     const refs = prev && prev.m === m && prev.z === st.size && prev.refs ? prev.refs : (dread++, wikiRefs(fs.readFileSync(path.join(vault, rel), 'utf8')));
     const hit = [...new Set(refs.map(resolve).filter(Boolean))];
     return { path: rel, m, z: st.size, refs, links: hit.filter(p => /\.md$/i.test(p) && p !== rel), imgs: hit.filter(p => IMG.test(p)) };
-  });
+  })).filter(Boolean);
   const dwrote = writeIfChanged(docOut, { docs });
   console.log(`문서 목록 ${docs.length}건(새로 읽은 노트 ${dread}건): ${dwrote ? '바뀌어 적었다' : '그대로라 안 적었다'}`);
 }
