@@ -2400,8 +2400,9 @@ function mailSheet(){
 // 노트 내용은 평소 읽기에 들어 있지 않다. 이 화면을 열 때 받아 와 여기에만 들고, 기기에 저장하지 않는다
 const libNew=()=>({idx:null,got:0,busy:false,err:null,p:"",s:"",q:"",stage:"",n:60,open:null,text:{},noteBusy:false,pk:"",pq:"",pn:24,pic:null});
 S.lib=libNew();
-// 목록은 받은 지 10분이 지났을 때만 다시 받는다(PC가 15분마다 갱신). 다시 받는 동안에는 옛 목록을 그대로 보여 준다
-function libLoad(force){const L=S.lib;if(L.busy||(((L.idx&&Date.now()-L.got<6e5)||L.err)&&!force))return;L.busy=true;L.err=null;
+// 목록은 받은 지 2분이 지났을 때만 다시 받는다(PC가 2분마다 갱신하고, 바뀌었을 때만 파일을 쓴다). 다시 받는 동안에는 옛 목록을 그대로 보여 준다
+const LIST_TTL=12e4;
+function libLoad(force){const L=S.lib;if(L.busy||(((L.idx&&Date.now()-L.got<LIST_TTL)||L.err)&&!force))return;L.busy=true;L.err=null;
   api("works",{}).then(r=>{L.idx=r;L.got=Date.now()}).catch(e=>{L.err=e.message}).finally(()=>{L.busy=false;if(S.view==="lib"||S.view==="pics")render()})}
 // 절 제목으로 그 절이 작업의 어느 단계인지 가른다. 노트에 적힌 것만 쓰고 지어내지 않는다.
 // 앞에 있는 것이 먼저다(「남은 문제」는 문제가 아니라 남은 것이다)
@@ -2517,7 +2518,7 @@ async function imgPrefetch(){
   if(preOn||S.demo||!S.data||!window.caches||(navigator.connection&&navigator.connection.saveData))return;preOn=true;
   const nap=ms=>new Promise(r=>setTimeout(r,ms));
   try{
-    const L=S.lib;if(!L.idx||Date.now()-L.got>6e5){L.idx=await api("works",{});L.got=Date.now()}
+    const L=S.lib;if(!L.idx||Date.now()-L.got>LIST_TTL){L.idx=await api("works",{});L.got=Date.now()}
     const c=await caches.open(IMG_CACHE),need=[];
     for(const p of picList().all)if(imgM(p)&&!IMGC.has(p)&&!(await c.match(imgKey(p))))need.push(p);
     let i=0;
@@ -2582,8 +2583,9 @@ function viewPics(){
     h("div",{class:"seg",role:"group","aria-label":"그림 종류"},[["","전체",all.length],["svg","SVG",nSvg],["cap","캡처",all.length-nSvg]].map(([k,nm,c])=>h("button",{"aria-pressed":String(L.pk===k),onclick:()=>set({pk:k})},nm+" "+c))),
     h("input",{class:"in grow",id:"pic-q",type:"search",placeholder:"그림 검색 (파일 이름·폴더·쓰는 노트)",value:L.pq,style:"max-width:320px","aria-label":"그림 검색",
       oninput:e=>{L.pq=e.target.value;L.pn=24;clearTimeout(wqT);wqT=setTimeout(render,250)}}),
-    (L.pq||L.pk)?h("button",{class:"btn ghost",onclick:()=>set({pk:"",pq:""})},"필터 지우기"):null);
-  return [bar,card("그림",{icon:"pic",count:list.length+"장"+(L.idx.at?" · 목록 "+agoTxt(L.idx.at)+" 기준":"")},
+    (L.pq||L.pk)?h("button",{class:"btn ghost",onclick:()=>set({pk:"",pq:""})},"필터 지우기"):null,
+    h("button",{class:"btn ghost",disabled:L.busy,title:"PC가 2분마다 목록을 갱신합니다",onclick:()=>{libLoad(true);render()}},ic("refresh"),L.busy?"불러오는 중":"새로 고침"));
+  return [bar,card("그림",{icon:"pic",count:list.length+"장"+(L.idx.at?" · 목록 마지막 변경 "+agoTxt(L.idx.at):"")},
     list.length?h("div",{class:"pics"},list.slice(0,L.pn).map(p=>{const ns=use[p]||[];
       return h("button",{class:"pic","data-k":"pic:"+p,onclick:()=>{L.pic=p;render();$("#scroll").scrollTop=0}},h("div",{class:"th"},imgEl(p)),
         h("b",null,picName(p)),h("small",null,picDir(p)+(ns.length?" · 노트 "+ns.length+"건":" · 노트에 안 넣음")))})):h("div",{class:"empty"},"조건에 맞는 그림이 없습니다"),
@@ -2601,7 +2603,7 @@ function picOne(p,ns){const L=S.lib;
 /* ═════════ desk: 문서 — 옵시디언 볼트 전체를 옵시디언처럼 본다. 왼쪽 폴더 나무, 가운데 노트, [[링크]]로 이동, 이 노트를 가리키는 노트. 읽기만 한다 ═════════ */
 // 목록은 PC가 만든 「문서 목록.json」(경로, 링크, 그림). 받은 지 10분이 지났을 때만 다시 받는다. 노트 글은 열 때 받아 메모리에만 둔다
 const DOCS={idx:null,got:0,busy:false,err:null,by:null,back:null,open:null,q:"",fold:{},text:{},noteBusy:false};
-function docsLoad(force){const D=DOCS;if(D.busy||(((D.idx&&Date.now()-D.got<6e5)||D.err)&&!force))return;D.busy=true;D.err=null;
+function docsLoad(force){const D=DOCS;if(D.busy||(((D.idx&&Date.now()-D.got<LIST_TTL)||D.err)&&!force))return;D.busy=true;D.err=null;
   api("docs",{}).then(r=>{const by={},back={},put=(k,p)=>{if(!by[k]||by[k].length>p.length)by[k]=p};
       // 링크 이름 → 경로(이름만 적으면 같은 이름 가운데 경로가 짧은 것, 옵시디언과 같다), 노트 → 그 노트를 가리키는 노트들
       r.docs.forEach(d=>{const f=d.path.toLowerCase(),n=f.split("/").pop();[f,n,f.slice(0,-3),n.slice(0,-3)].forEach(k=>put(k,d.path));
@@ -2633,7 +2635,8 @@ function viewDocs(){
   const side=h("aside",{class:"dside"},
     h("input",{class:"in",id:"doc-q",type:"search",placeholder:"노트 이름·폴더 검색",value:D.q,"aria-label":"노트 이름·폴더 검색",oninput:e=>{D.q=e.target.value;clearTimeout(wqT);wqT=setTimeout(render,200)}}),
     h("div",{class:"dtree"},docTree()),
-    h("div",{class:"faint",style:"font-size:11.5px"},D.idx.docs.length+"개 노트 · 목록 "+agoTxt(D.idx.at)+" 기준"));
+    h("div",{class:"row",style:"font-size:11.5px"},h("span",{class:"faint"},D.idx.docs.length+"개 노트 · 목록 마지막 변경 "+agoTxt(D.idx.at)),
+      h("button",{class:"btn ghost sm",style:"margin-left:auto",disabled:D.busy,title:"PC가 2분마다 목록을 갱신합니다",onclick:()=>{docsLoad(true);render()}},ic("refresh"),D.busy?"불러오는 중":"새로 고침")));
   const d=D.open&&(D.idx.docs.find(x=>x.path===D.open)||{path:D.open,links:[],imgs:[]});
   return [h("div",{class:"docs"},side,h("div",{class:"dmain"},d?docNoteView(d):h("div",{class:"empty"},"왼쪽에서 노트를 고르세요. 노트 속 [[링크]]를 누르면 그 노트로 갑니다")))];
 }

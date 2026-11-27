@@ -31,5 +31,9 @@ for (const r of repos) {
 rows.sort((a, b) => (a < b ? 1 : a > b ? -1 : 0));   // 날짜가 줄 맨 앞이라 글자순이 곧 최근순이다
 
 const head = '# 작업 내역\n\n이 파일은 PC의 깃 기록에서 자동으로 만든다(desk의 tools/sync-git.js). 손으로 고쳐도 다음 실행 때 덮어쓴다.\n\n';
-fs.writeFileSync(out, head + rows.join('\n') + '\n');
+// 내용이 같으면 쓰지 않는다(예약 작업이 2분마다 돌아도 드라이브에 같은 파일을 다시 올리지 않게)
+const text = head + rows.join('\n') + '\n';
+let prev = null;
+try { prev = fs.readFileSync(out, 'utf8'); } catch (e) { /* 처음이면 쓴다 */ }
+if (prev !== text) fs.writeFileSync(out, text);
 console.log(`작업 내역 ${rows.length}건을 적었다: ${out}`);

@@ -77,6 +77,18 @@ function walkDocs(rel, skipTop, acc) {
   return acc;
 }
 
+/**
+ * 내용이 바뀌었을 때만 쓴다(at은 마지막으로 바뀐 시각). 예약 작업이 2분마다 돌아도 드라이브에 같은 파일을 다시 올리지 않게.
+ * 같은 데이터는 JSON.stringify 결과도 같다(키 순서를 이 프로그램이 정한다).
+ */
+function writeIfChanged(file, data) {
+  let old = null;
+  try { old = JSON.parse(fs.readFileSync(file, 'utf8')); } catch (e) { /* 없거나 깨졌으면 쓴다 */ }
+  if (old) { delete old.at; if (JSON.stringify(old) === JSON.stringify(data)) return false; }
+  fs.writeFileSync(file, JSON.stringify(Object.assign({ at: new Date().toISOString() }, data)));
+  return true;
+}
+
 if (require.main === module) {
   if (!vault || !out || !roots.length) {
     console.error('사용법: node tools/sync-vault.js <볼트 폴더> <적을 파일> <훑을 폴더> ...');
@@ -102,8 +114,8 @@ if (require.main === module) {
   // 그림을 고친 시각. 화면은 이 값이 같으면 기기에 받아 둔 그림을 다시 쓰고, 다르면 새로 받는다
   const imgM = {};
   imgs.forEach(f => { imgM[f] = Math.floor(fs.statSync(path.join(vault, f)).mtimeMs); });
-  fs.writeFileSync(out, JSON.stringify({ at: new Date().toISOString(), notes, imgs, imgM }));
-  console.log(`작업 목록 ${notes.length}건, 그림 ${imgs.length}장(새로 읽은 노트 ${read}건)을 적었다: ${out}`);
+  const wrote = writeIfChanged(out, { notes, imgs, imgM });
+  console.log(`작업 목록 ${notes.length}건, 그림 ${imgs.length}장(새로 읽은 노트 ${read}건): ${wrote ? '바뀌어 적었다' : '그대로라 안 적었다'}`);
 
   // 문서 탭: 볼트 전체의 노트와 노트끼리의 링크. 「문서 목록.json」을 작업 목록 옆에 적는다
   const docOut = path.join(path.dirname(out), '문서 목록.json');
@@ -119,8 +131,8 @@ if (require.main === module) {
     const hit = [...new Set(refs.map(resolve).filter(Boolean))];
     return { path: rel, m, z: st.size, refs, links: hit.filter(p => /\.md$/i.test(p) && p !== rel), imgs: hit.filter(p => IMG.test(p)) };
   });
-  fs.writeFileSync(docOut, JSON.stringify({ at: new Date().toISOString(), docs }));
-  console.log(`문서 목록 ${docs.length}건(새로 읽은 노트 ${dread}건)을 적었다: ${docOut}`);
+  const dwrote = writeIfChanged(docOut, { docs });
+  console.log(`문서 목록 ${docs.length}건(새로 읽은 노트 ${dread}건): ${dwrote ? '바뀌어 적었다' : '그대로라 안 적었다'}`);
 }
 
 module.exports = { describe, wikiRefs, resolver };
