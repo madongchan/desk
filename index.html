@@ -963,7 +963,7 @@ async function refresh(quiet){
   S.sync.busy=true;S.sync.err=null;renderSync();
   try{
     const d=await api("load",{});
-    S.data=d;if(!S.demo)ls.set("desk:cache",d);S.authErr=null;notifyEvents();
+    S.data=d;if(!S.demo){ls.set("desk:cache",d);imgPrefetchSoon()}S.authErr=null;notifyEvents();
   }
   catch(e){S.sync.err=e.message;if(!quiet)toast("불러오기 실패 · "+e.message,"bad");if(S.authErr&&!S.data){S.cfg=null;}}
   S.sync.busy=false;
@@ -2379,10 +2379,11 @@ function mailSheet(){
 
 /* ═════════ desk: 작업 — 볼트의 작업 노트를 프로젝트별로 보고, 넣어 둔 다이어그램과 캡처를 함께 본다. 읽기만 한다 ═════════ */
 // 노트 내용은 평소 읽기에 들어 있지 않다. 이 화면을 열 때 받아 와 여기에만 들고, 기기에 저장하지 않는다
-const libNew=()=>({idx:null,busy:false,err:null,p:"",s:"",q:"",stage:"",n:60,open:null,text:{},noteBusy:false,pk:"",pq:"",pn:24,pic:null});
+const libNew=()=>({idx:null,got:0,busy:false,err:null,p:"",s:"",q:"",stage:"",n:60,open:null,text:{},noteBusy:false,pk:"",pq:"",pn:24,pic:null});
 S.lib=libNew();
-function libLoad(force){const L=S.lib;if(L.busy||((L.idx||L.err)&&!force))return;L.busy=true;L.err=null;
-  api("works",{}).then(r=>{L.idx=r}).catch(e=>{L.err=e.message}).finally(()=>{L.busy=false;if(S.view==="lib"||S.view==="pics")render()})}
+// 목록은 받은 지 10분이 지났을 때만 다시 받는다(PC가 15분마다 갱신). 다시 받는 동안에는 옛 목록을 그대로 보여 준다
+function libLoad(force){const L=S.lib;if(L.busy||(((L.idx&&Date.now()-L.got<6e5)||L.err)&&!force))return;L.busy=true;L.err=null;
+  api("works",{}).then(r=>{L.idx=r;L.got=Date.now()}).catch(e=>{L.err=e.message}).finally(()=>{L.busy=false;if(S.view==="lib"||S.view==="pics")render()})}
 // 절 제목으로 그 절이 작업의 어느 단계인지 가른다. 노트에 적힌 것만 쓰고 지어내지 않는다.
 // 앞에 있는 것이 먼저다(「남은 문제」는 문제가 아니라 남은 것이다)
 const WSTAGES=[["남은 것","남은|한계|미수정|todo|learned|배운","var(--gray)"],["판단","결정|판단|검토|대안|선택|방향|버린","var(--orange)"],["원인","원인|조사|분석|진단","var(--yellow)"],
@@ -2481,8 +2482,36 @@ const imgM=p=>((S.lib.idx&&S.lib.idx.imgM)||{})[p];
 const imgKey=p=>"https://desk.local/img/"+encodeURIComponent(p)+"?m="+imgM(p);
 function imgPut(p,v){if(IMGC.has(p)){imgcSize-=IMGC.get(p).length;IMGC.delete(p)}IMGC.set(p,v);imgcSize+=v.length;
   for(const [k,x] of IMGC){if(imgcSize<=60e6)break;IMGC.delete(k);imgcSize-=x.length}} // ponytail: 먼저 넣은 것부터 버린다. 자주 보는 것을 앞으로 올리지는 않는다
-function imgDone(p,v){imgWait.delete(p);if(!v.startsWith("err:"))imgPut(p,v);
-  document.querySelectorAll("[data-img]").forEach(el=>{if(el.dataset.img===p)el.replaceWith(imgNode(p,v))})}
+// mem=false(백그라운드 미리 받기): 화면에 그 칸이 떠 있을 때만 메모리에 넣는다(미리 받은 수백 장이 첫 화면 그림을 밀어내지 않게)
+function imgDone(p,v,mem=true){imgWait.delete(p);let shown=false;
+  document.querySelectorAll("[data-img]").forEach(el=>{if(el.dataset.img===p){shown=true;el.replaceWith(imgNode(p,v))}});
+  if(!v.startsWith("err:")&&(mem||shown))imgPut(p,v)}
+// desk: 그림 미리 받기. 연결되고 4초 뒤 백그라운드에서 그림 탭 순서대로 기기 캐시에 채워 둔다. 캐시에 있는 것은 건너뛰므로 처음 한 번만 다 받는다.
+// 화면에서 청한 그림이 있으면 그쪽이 먼저고, 미리 받기는 두 요청만 쓴다. 데이터 절약 모드면 하지 않는다
+let preT=0,preOn=false;
+const imgPrefetchSoon=()=>{clearTimeout(preT);preT=setTimeout(imgPrefetch,4000)};
+async function imgPrefetch(){
+  if(preOn||S.demo||!S.data||!window.caches||(navigator.connection&&navigator.connection.saveData))return;preOn=true;
+  const nap=ms=>new Promise(r=>setTimeout(r,ms));
+  try{
+    const L=S.lib;if(!L.idx||Date.now()-L.got>6e5){L.idx=await api("works",{});L.got=Date.now()}
+    const c=await caches.open(IMG_CACHE),need=[];
+    for(const p of picList().all)if(imgM(p)&&!IMGC.has(p)&&!(await c.match(imgKey(p))))need.push(p);
+    let i=0;
+    const worker=async()=>{while(i<need.length&&S.data){
+      if(imgQ.length||imgBusy>=6){await nap(400);continue} // 화면 요청이 먼저
+      const b=need.slice(i,i+=3).filter(p=>!IMGC.has(p)&&!imgWait.has(p));if(!b.length)continue;
+      b.forEach(p=>imgWait.add(p));
+      // 미리 받기가 못 받은 그림이 마침 화면에 떠 있으면, 고리만 돌고 멈추지 않게 화면 요청으로 다시 청한다
+      const giveUp=p=>{imgWait.delete(p);if([...document.querySelectorAll("[data-img]")].some(el=>el.dataset.img===p))imgWant(p)};
+      try{const r=await api("workImgs",{paths:b});
+        b.forEach(p=>{const x=(r.imgs||{})[p];if(!x||!x.b64){giveUp(p);return}
+          const v="data:"+x.mime+";base64,"+x.b64;c.put(imgKey(p),new Response(v)).catch(()=>{});imgDone(p,v,false)})}
+      catch{b.forEach(giveUp);await nap(5000)}}};
+    await Promise.all([worker(),worker()]);
+  }catch{/* 미리 받기는 실패해도 그만이다. 그림 탭을 열면 그때 받는다 */}
+  finally{preOn=false}
+}
 // 화면은 창이 아니라 #scroll 안에서 굴러간다. 기준을 거기로 잡아야 「아래 800px까지 미리」가 먹는다
 const imgObs="IntersectionObserver" in window?new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){imgObs.unobserve(e.target);imgWant(e.target.dataset.img)}}),{root:document.getElementById("scroll"),rootMargin:"0px 0px 800px 0px"}):null;
 async function imgWant(p){
@@ -2561,7 +2590,7 @@ async function connect(){
   if(!/^(https:\/\/script\.google(usercontent)?\.com\/|\/api$)/.test(url)){S.setupErr="Apps Script 웹 앱 주소(…/exec)를 넣어 주세요";render();return}
   S.cfg={url,pass};S.setupErr=null;const b=$("#su-go");if(b){b.disabled=true;b.textContent="연결하는 중…"}
   try{const d=await api("load",{});if(!d.notion)throw new Error("이 주소는 desk 서버가 아닙니다");
-    S.data=d;ls.set("desk:cfg",S.cfg);ls.set("desk:cache",d);S.drafts["su-pass"]="";render();toast("연결했습니다")}
+    S.data=d;ls.set("desk:cfg",S.cfg);ls.set("desk:cache",d);S.drafts["su-pass"]="";render();toast("연결했습니다");imgPrefetchSoon()}
   catch(e){S.cfg=null;S.setupErr=e.message;render()}
 }
 function lock(){ls.del("desk:cfg");ls.del("desk:cache");IMGC.clear();imgcSize=0;if(window.caches)caches.delete(IMG_CACHE).catch(()=>{});S.cfg=null;S.data=null;S.demo=false;S.sel=null;render()}
@@ -2606,7 +2635,8 @@ function render(){
   if(!VIEWS.some(v=>v[0]===S.view))S.view="today";
   if(S.view!=="att"&&S.pay.open)S.pay={open:false,rows:null,busy:false};
   if(S.view!=="pf"&&S.pfdoc.html)S.pfdoc=PFDOC0(); // desk: 포트폴리오 화면을 떠나면 받아 둔 문서를 버린다
-  if(S.view!=="lib"&&S.view!=="pics"&&(S.lib.idx||S.lib.err))S.lib=libNew(); // desk: 작업·그림 화면을 떠나면 받아 둔 노트를 버린다(그림은 IMGC에 남겨 다시 올 때 바로 보인다)
+  // desk: 작업·그림 화면을 떠나면 받아 둔 노트 글과 고르던 조건을 버린다. 목록(idx)은 남긴다(백그라운드 미리 받기가 쓰고, 다시 올 때 바로 보인다)
+  if(S.view!=="lib"&&S.view!=="pics"&&(Object.keys(S.lib.text).length||S.lib.err||S.lib.open||S.lib.pic||S.lib.q||S.lib.pq))S.lib=Object.assign(libNew(),{idx:S.lib.idx,got:S.lib.got});
   // 다시 그리면 화면에서 사라진 칸을 그만 지켜보고, 아직 보내지 않은 그림 요청은 뺀다(새 칸이 보이면 다시 청한다)
   if(imgObs){imgObs.disconnect();imgQ.splice(0).forEach(p=>imgWait.delete(p))}
   $("#app").hidden=false;syncProjects();
