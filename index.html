@@ -676,6 +676,25 @@ tr.cur td{background:rgba(91,122,153,.1)}
 .pic small{font-size:11px;color:var(--fg3);overflow-wrap:anywhere}
 @media (max-width:520px){.pics{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .md .mdl{color:#8fa9c4}
+a.mdl{text-decoration:none;cursor:pointer}a.mdl:hover{text-decoration:underline}
+/* 문서 탭 */
+.docs{display:grid;grid-template-columns:280px minmax(0,1fr);gap:16px;align-items:start}
+.dside{position:sticky;top:0;display:grid;grid-template-rows:auto minmax(0,1fr) auto;gap:8px;max-height:calc(100vh - 120px)}
+.dtree{overflow:auto;border:.5px solid var(--line);border-radius:10px;padding:4px;background:rgba(0,0,0,.15)}
+.dnav{display:flex;gap:6px;align-items:baseline;width:100%;min-width:0;text-align:left;border:0;background:transparent;color:inherit;padding:5px 8px;border-radius:6px;font-size:13px;cursor:pointer}
+.dnav:hover{background:rgba(255,255,255,.06)}
+.dnav.on{background:rgba(143,169,196,.2)}
+.dnav b{font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.dnav.f b{font-weight:600;color:var(--fg2)}
+.dnav small{margin-left:auto;padding-left:6px;color:var(--fg3);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:none;max-width:45%}
+.dnav .car{width:10px;flex:none;color:var(--fg3);font-size:11px}
+.dmain{min-width:0;display:grid;gap:12px;align-content:start}
+.dhead h1{font-size:24px;margin:2px 0 0;font-weight:700;overflow-wrap:anywhere}
+.dprops summary{cursor:pointer;color:var(--fg3);font-size:12px}
+.dprops pre{font-size:12px;color:var(--fg2);white-space:pre-wrap;margin:6px 0 0}
+.dback{border-top:.5px solid var(--line);padding-top:10px}
+.dback h3{font-size:13px;color:var(--fg2);margin:0 0 4px;font-weight:600}
+@media (max-width:760px){.docs{grid-template-columns:1fr}.dside{position:static;max-height:none}.dtree{max-height:40vh}}
 .md blockquote{margin:6px 0;padding-left:10px;border-left:2px solid var(--line);color:var(--fg2)}
 /* 사이드바 접기 */
 .app.focus{grid-template-columns:minmax(0,1fr)}
@@ -938,7 +957,7 @@ const S={
   f:{q:"",p:"",y:"",mode:"list"}, sync:{busy:false,err:null}, addDay:null, palette:null,
 };
 // desk: 원본의 브리핑, 오피스 메뉴와 고정 프로젝트는 뺐다
-const VIEWS=[["today","대시보드","today"],["work","업무","work"],["life","일상","life"],["att","근태","att"],["pf","포트폴리오","star"],["job","커리어","star"],["lib","작업","lib"],["pics","그림","pic"],["tools","도구","tools"]];
+const VIEWS=[["today","대시보드","today"],["work","업무","work"],["life","일상","life"],["att","근태","att"],["pf","포트폴리오","star"],["job","커리어","star"],["lib","작업","lib"],["pics","그림","pic"],["docs","문서","news"],["tools","도구","tools"]];
 const PVIEWS=[];
 
 /* ═════════ 서버 ═════════ */
@@ -2425,6 +2444,7 @@ function viewLib(){
 }
 // 노트 하나: 절 제목을 단계로 세운 「생각의 흐름」과, 그림이 함께 뜨는 전문
 function libNote(o){
+  docsLoad(); // 노트 속 [[링크]]를 문서 탭으로 누를 수 있게 문서 목록을 받아 둔다
   const L=S.lib,txt=L.text[o.path];
   if(txt==null&&!L.noteBusy){L.noteBusy=true;api("workNote",{path:o.path}).then(r=>{L.text[o.path]=r.text}).catch(e=>{L.text[o.path]="";toast("노트를 읽지 못했습니다: "+e.message,"bad")}).finally(()=>{L.noteBusy=false;if(S.view==="lib")render()})}
   const head=h("div",{class:"row"},h("button",{class:"btn",onclick:()=>{L.open=null;render()}},"← 목록"),
@@ -2454,7 +2474,10 @@ function libSteps(body){
 function mdInline(s){return s.split(/(`[^`]+`|\*\*[^*]+\*\*|!?\[\[[^\]]+\]\]|\[[^\]]+\]\([^)]+\))/g).filter(Boolean).map(x=>{let m;
   if(x[0]==="`")return h("code",null,x.slice(1,-1));
   if(x.startsWith("**"))return h("b",null,x.slice(2,-2));
-  if((m=/^!?\[\[([^\]|]+)(?:\|([^\]]+))?\]\]$/.exec(x)))return h("span",{class:"mdl"},m[2]||m[1]);
+  if((m=/^!?\[\[([^\]|]+)(?:\|([^\]]+))?\]\]$/.exec(x))){
+    // desk: 문서 목록에 있는 노트를 가리키면 누를 수 있다(문서 탭의 그 노트로)
+    const label=m[2]||m[1],t=x[0]!=="!"&&docLink(m[1]);
+    return t?h("a",{class:"mdl",href:"#",title:t,onclick:e=>{e.preventDefault();openDoc(t)}},label):h("span",{class:"mdl"},label)}
   if((m=/^\[([^\]]+)\]\(([^)]+)\)$/.exec(x)))return /^https?:/.test(m[2])?h("a",{href:m[2],target:"_blank",rel:"noopener"},m[1]):m[1];
   return x})}
 function libMd(body,o){
@@ -2575,6 +2598,60 @@ function picOne(p,ns){const L=S.lib;
       h("b",null,n.t),h("small",null,[n.d,n.p,n.s].filter(Boolean).join(" · ")))):h("div",{class:"empty"},"이 그림을 넣은 노트가 없습니다"))];
 }
 
+/* ═════════ desk: 문서 — 옵시디언 볼트 전체를 옵시디언처럼 본다. 왼쪽 폴더 나무, 가운데 노트, [[링크]]로 이동, 이 노트를 가리키는 노트. 읽기만 한다 ═════════ */
+// 목록은 PC가 만든 「문서 목록.json」(경로, 링크, 그림). 받은 지 10분이 지났을 때만 다시 받는다. 노트 글은 열 때 받아 메모리에만 둔다
+const DOCS={idx:null,got:0,busy:false,err:null,by:null,back:null,open:null,q:"",fold:{},text:{},noteBusy:false};
+function docsLoad(force){const D=DOCS;if(D.busy||(((D.idx&&Date.now()-D.got<6e5)||D.err)&&!force))return;D.busy=true;D.err=null;
+  api("docs",{}).then(r=>{const by={},back={},put=(k,p)=>{if(!by[k]||by[k].length>p.length)by[k]=p};
+      // 링크 이름 → 경로(이름만 적으면 같은 이름 가운데 경로가 짧은 것, 옵시디언과 같다), 노트 → 그 노트를 가리키는 노트들
+      r.docs.forEach(d=>{const f=d.path.toLowerCase(),n=f.split("/").pop();[f,n,f.slice(0,-3),n.slice(0,-3)].forEach(k=>put(k,d.path));
+        d.links.forEach(t=>(back[t]=back[t]||[]).push(d.path))});
+      Object.assign(D,{idx:r,got:Date.now(),by,back})})
+    .catch(e=>{D.err=e.message}).finally(()=>{D.busy=false;if(["docs","lib"].includes(S.view))render()})}
+const docLink=name=>DOCS.by?DOCS.by[name.split(/[#^]/)[0].trim().toLowerCase()]||null:null;
+const docTitle=p=>p.split("/").pop().replace(/\.md$/i,"");
+const docCount=n=>n.files.length+Object.values(n.dirs).reduce((s,x)=>s+docCount(x),0);
+function openDoc(p){DOCS.open=p;S.view="docs";ls.set("desk:view","docs");
+  const ps=p.split("/");for(let i=1;i<ps.length;i++)DOCS.fold[ps.slice(0,i).join("/")]=true; // 나무에서 그 노트가 보이게 위 폴더를 편다
+  render();$("#scroll").scrollTop=0}
+function docTree(){
+  const D=DOCS,q=D.q.trim().toLowerCase(),docs=D.idx.docs;
+  if(q){const hit=docs.filter(d=>d.path.toLowerCase().includes(q)).slice(0,200);
+    return hit.length?hit.map(d=>h("button",{class:"dnav"+(D.open===d.path?" on":""),title:d.path,onclick:()=>openDoc(d.path)},h("b",null,docTitle(d.path)),h("small",null,d.path.split("/").slice(0,-1).join("/")))):h("div",{class:"empty"},"맞는 노트가 없습니다")}
+  const root={dirs:{},files:[]};
+  docs.forEach(d=>{const ps=d.path.split("/");let n=root;ps.slice(0,-1).forEach(s=>{n=n.dirs[s]=n.dirs[s]||{dirs:{},files:[]}});n.files.push(d.path)});
+  const rows=[],walk=(n,base,depth)=>{
+    Object.keys(n.dirs).sort((a,b)=>a.localeCompare(b,"ko")).forEach(k=>{const p=base?base+"/"+k:k,open=!!D.fold[p];
+      rows.push(h("button",{class:"dnav f",style:"padding-left:"+(6+depth*14)+"px","aria-expanded":String(open),onclick:()=>{D.fold[p]=!open;render()}},h("span",{class:"car"},open?"▾":"▸"),h("b",null,k),h("small",null,docCount(n.dirs[k]))));
+      if(open)walk(n.dirs[k],p,depth+1)});
+    n.files.slice().sort((a,b)=>a.localeCompare(b,"ko")).forEach(p=>rows.push(h("button",{class:"dnav"+(D.open===p?" on":""),style:"padding-left:"+(22+depth*14)+"px",title:p,onclick:()=>openDoc(p)},h("b",null,docTitle(p)))))};
+  walk(root,"",0);return rows}
+function viewDocs(){
+  docsLoad();const D=DOCS;
+  if(D.err)return [h("div",{class:"banner"},"문서 목록을 읽지 못했습니다: "+D.err," ",h("button",{class:"btn sm",onclick:()=>docsLoad(true)},"다시 시도"))];
+  if(!D.idx)return [h("div",{class:"empty"},"문서 목록을 불러오는 중…")];
+  const side=h("aside",{class:"dside"},
+    h("input",{class:"in",id:"doc-q",type:"search",placeholder:"노트 이름·폴더 검색",value:D.q,"aria-label":"노트 이름·폴더 검색",oninput:e=>{D.q=e.target.value;clearTimeout(wqT);wqT=setTimeout(render,200)}}),
+    h("div",{class:"dtree"},docTree()),
+    h("div",{class:"faint",style:"font-size:11.5px"},D.idx.docs.length+"개 노트 · 목록 "+agoTxt(D.idx.at)+" 기준"));
+  const d=D.open&&(D.idx.docs.find(x=>x.path===D.open)||{path:D.open,links:[],imgs:[]});
+  return [h("div",{class:"docs"},side,h("div",{class:"dmain"},d?docNoteView(d):h("div",{class:"empty"},"왼쪽에서 노트를 고르세요. 노트 속 [[링크]]를 누르면 그 노트로 갑니다")))];
+}
+function docNoteView(d){
+  const D=DOCS,txt=D.text[d.path];
+  if(txt==null&&!D.noteBusy){D.noteBusy=true;
+    api("docNote",{path:d.path}).then(r=>{if(Object.keys(D.text).length>80)D.text={};D.text[d.path]=r.text}) // ponytail: 80개 넘으면 통째로 비운다
+      .catch(e=>{D.text[d.path]="";toast("노트를 읽지 못했습니다: "+e.message,"bad")}).finally(()=>{D.noteBusy=false;if(S.view==="docs")render()})}
+  const head=h("div",{class:"dhead"},h("div",{class:"faint",style:"font-size:12px"},d.path.split("/").slice(0,-1).join(" / ")||"볼트 맨 위"),h("h1",null,docTitle(d.path)));
+  if(txt==null)return [head,h("div",{class:"mdi wait",style:"min-height:240px","aria-label":"노트를 불러오는 중",role:"img"})];
+  const fm=/^---\r?\n([\s\S]*?)\r?\n---\r?\n?/.exec(txt),body=fm?txt.slice(fm[0].length):txt,back=(D.back[d.path]||[]).slice().sort((a,b)=>a.localeCompare(b,"ko"));
+  return [head,
+    fm?h("details",{class:"dprops"},h("summary",null,"속성"),h("pre",null,fm[1])):null,
+    h("div",{class:"md"},libMd(body,{imgs:d.imgs})),
+    h("section",{class:"dback"},h("h3",null,"이 노트를 가리키는 노트 · "+back.length+"건"),
+      back.length?back.map(p=>h("button",{class:"lrow",onclick:()=>openDoc(p)},h("b",null,docTitle(p)),h("small",null,p))):h("div",{class:"faint",style:"font-size:12px"},"없습니다"))];
+}
+
 function setupView(){
   const err=S.setupErr;
   return h("div",{class:"setup"},h("div",{class:"box"},
@@ -2593,7 +2670,7 @@ async function connect(){
     S.data=d;ls.set("desk:cfg",S.cfg);ls.set("desk:cache",d);S.drafts["su-pass"]="";render();toast("연결했습니다");imgPrefetchSoon()}
   catch(e){S.cfg=null;S.setupErr=e.message;render()}
 }
-function lock(){ls.del("desk:cfg");ls.del("desk:cache");IMGC.clear();imgcSize=0;if(window.caches)caches.delete(IMG_CACHE).catch(()=>{});S.cfg=null;S.data=null;S.demo=false;S.sel=null;render()}
+function lock(){ls.del("desk:cfg");ls.del("desk:cache");IMGC.clear();imgcSize=0;Object.assign(DOCS,{idx:null,got:0,by:null,back:null,open:null,text:{},err:null});if(window.caches)caches.delete(IMG_CACHE).catch(()=>{});S.cfg=null;S.data=null;S.demo=false;S.sel=null;render()}
 
 /* ═════════ 전체 그리기 ═════════ */
 function navCounts(){if(!S.data)return{};const today=TODAY(),open=S.data.tasks.filter(t=>!isDone(t));
@@ -2653,7 +2730,7 @@ function render(){
     h("button",{class:"search",onclick:openPalette,"aria-label":"검색 ("+KEY+"K)"},ic("search"),h("span",null,"검색·명령"),h("kbd",null,KEY+"K")),
     h("button",{class:"btn pri",onclick:()=>openQuick("task")},ic("plus"),"새로 만들기"));
   S.enter=S._pv!==S.view;S._pv=S.view;
-  const views={today:viewToday,work:viewWork,life:viewLife,att:viewAtt,pf:viewPf,job:viewJob,lib:viewLib,pics:viewPics,tools:viewTools};
+  const views={today:viewToday,work:viewWork,life:viewLife,att:viewAtt,pf:viewPf,job:viewJob,lib:viewLib,pics:viewPics,docs:viewDocs,tools:viewTools};
   if(S.view!=="pf"&&PF.story!=null)storyClose();
   let content;try{content=(views[S.view]||viewToday)()}catch(e){console.error(e);content=h("div",{class:"banner"},"이 화면을 그리는 중 문제가 생겼습니다: "+e.message)}
   fill($("#page"),...[connBanner(),S.demo?h("div",{class:"banner"},"지금은 예시 데이터입니다. 실제 옵시디언과 연결하려면 ",h("button",{class:"btn sm",onclick:lock},"연결하기"),"를 누르세요."):null,...[].concat(content)].filter(Boolean));
@@ -2736,8 +2813,11 @@ async function demoApi(action,args){
   if(action==="mailBody")return [{from:"예시",date:new Date().toISOString(),body:"예시 본문입니다."}];
   if(action==="jobMail")return [];
   if(action==="works")return {at:new Date().toISOString(),notes:[{p:"예시 프로젝트",s:"저장",t:"예시) 저장 순서 수정",d:TODAY(),path:"demo/a.md",sum:"저장이 뒤바뀌던 것을 고쳤다.",heads:["문제","원인","결정 과정","수정","확인","남은 문제"],imgs:["demo/a.svg"]},{p:"예시 프로젝트",s:"화면",t:"예시) 설정 화면 정리",d:addD(TODAY(),-1),path:"demo/b.md",sum:"글자가 겹치던 곳을 고쳤다.",heads:["동작","바뀐 파일"],imgs:[]}],imgs:["demo/a.svg","demo/따로 그린 구조.svg"],imgM:{}};
+  if(action==="docs")return {at:new Date().toISOString(),docs:[{path:"entities/예시 프로젝트/저장 순서 수정.md",links:["entities/예시 프로젝트/설정 화면 정리.md"],imgs:["demo/a.svg"]},
+    {path:"entities/예시 프로젝트/설정 화면 정리.md",links:[],imgs:[]},{path:"About Me/소개.md",links:["entities/예시 프로젝트/저장 순서 수정.md"],imgs:[]},{path:"log.md",links:[],imgs:[]}]};
+  if(action==="docNote")return demoApi("workNote",args);
   if(action==="workImgs"){const one=await demoApi("workImg",{});return {imgs:Object.fromEntries((args.paths||[]).map(p=>[p,one]))}}
-  if(action==="workNote")return {text:"# 예시 노트\n\n![[a.svg]]\n\n## 문제\n저장한 값이 가끔 예전 값으로 돌아갔다.\n\n## 원인\n두 저장 요청이 겹치면 늦게 끝난 쪽이 이겼다.\n\n## 결정 과정\n잠금을 거는 안과 순서 번호를 붙이는 안을 견줬다. 잠금은 화면이 멈출 수 있어 **순서 번호**를 골랐다.\n\n## 수정\n- 요청마다 번호를 붙였다\n- 낮은 번호의 응답은 버린다\n\n## 확인\n| 잰 것 | 전 | 후 |\n|---|---|---|\n| 100번 저장 중 뒤바뀜 | 7번 | 0번 |\n\n## 남은 문제\n오프라인에서 쌓인 요청은 다루지 않았다.\n"};
+  if(action==="workNote")return {text:"# 예시 노트\n\n![[a.svg]]\n\n## 문제\n저장한 값이 가끔 예전 값으로 돌아갔다.\n\n## 원인\n두 저장 요청이 겹치면 늦게 끝난 쪽이 이겼다.\n\n## 결정 과정\n잠금을 거는 안과 순서 번호를 붙이는 안을 견줬다. 잠금은 화면이 멈출 수 있어 **순서 번호**를 골랐다.\n\n## 수정\n- 요청마다 번호를 붙였다\n- 낮은 번호의 응답은 버린다\n\n## 확인\n| 잰 것 | 전 | 후 |\n|---|---|---|\n| 100번 저장 중 뒤바뀜 | 7번 | 0번 |\n\n## 남은 문제\n오프라인에서 쌓인 요청은 다루지 않았다.\n\n관련: [[설정 화면 정리]] · [[없는 노트]]\n"};
   if(action==="workImg")return {mime:"image/svg+xml",b64:"PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA0MjAgMTIwIj48cmVjdCB3aWR0aD0iNDIwIiBoZWlnaHQ9IjEyMCIgZmlsbD0iI2ZmZiIvPjxyZWN0IHg9IjIwIiB5PSI0MCIgd2lkdGg9IjExMCIgaGVpZ2h0PSI0MCIgcng9IjYiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzMzMyIvPjx0ZXh0IHg9Ijc1IiB5PSI2NSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1zaXplPSIxMyI+7KCA7J6lIOyalOyyrTwvdGV4dD48cGF0aCBkPSJNMTMwIDYwaDcwIiBzdHJva2U9IiMzMzMiLz48cmVjdCB4PSIyMDAiIHk9IjQwIiB3aWR0aD0iMTEwIiBoZWlnaHQ9IjQwIiByeD0iNiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjYzAzOTJiIi8+PHRleHQgeD0iMjU1IiB5PSI2NSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1zaXplPSIxMyIgZmlsbD0iI2MwMzkyYiI+7Iic7IScIOqzoOyglTwvdGV4dD48cGF0aCBkPSJNMzEwIDYwaDUwIiBzdHJva2U9IiMzMzMiLz48dGV4dCB4PSIzODUiIHk9IjY1IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LXNpemU9IjEzIj7tjIzsnbw8L3RleHQ+PC9zdmc+"};
   if(action==="pays")return [{id:"demo-pay",m:TODAY().slice(0,7).replace("-","."),d:TODAY(),g:3000000,ded:400000,net:2600000}];
   if(action==="memoToTask")return {id:"demo-"+Date.now(),t:args.text,d:args.date,s:"시작 전"};

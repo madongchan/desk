@@ -206,6 +206,11 @@ assert.deepStrictEqual([nt.p, nt.s, nt.t, nt.d, nt.sum], ['게임', 'career', '�
 // 전체 경로로 적은 그림은 이름이 같은 다른 그림이 아니라 그 파일을 잡는다
 nt = describe('entities/게임/시험/2026-11-25 시험.md', '![[entities/게임/시험/가/01_a.png]]\n', { '01_a.png': 'entities/게임/시험/나/01_a.png', 'entities/게임/시험/가/01_a.png': 'entities/게임/시험/가/01_a.png' });
 assert.deepStrictEqual(nt.imgs, ['entities/게임/시험/가/01_a.png']);
+// 문서 탭: 링크 이름 뽑기와 경로 풀기
+const { wikiRefs, resolver } = require('../tools/sync-vault.js');
+assert.deepStrictEqual(wikiRefs('[[가]] [[나|별칭]] ![[그림.png|300]] [[다#절]] [[가]] [[라^블록]] `[[코드]]`'), ['가', '나', '그림.png', '다', '라', '코드']);
+const rs = resolver(['entities/게임/가.md', '가.md', 'entities/게임/Docs/그림.png', 'career/나.md']);
+assert.deepStrictEqual(['가', 'entities/게임/가', '나', 'NA'.toLowerCase(), '그림.png', '없는 것'].map(rs), ['가.md', 'entities/게임/가.md', 'career/나.md', null, 'entities/게임/Docs/그림.png', null]);
 nt = describe('entities/도구/메모 (2026-09-02).md', '글\n', {});
 assert.deepStrictEqual([nt.p, nt.s, nt.t, nt.d], ['도구', '', '메모 (2026-09-02)', '2026-09-02']);
 

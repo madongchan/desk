@@ -49,6 +49,34 @@ function describe(rel, text, imageByName) {
   };
 }
 
+/** 노트 글에서 [[링크]]와 ![[그림]]의 대상 이름을 뽑는다(#절, ^블록, |별칭은 뗀다). */
+function wikiRefs(text) {
+  return [...new Set([...text.matchAll(/!?\[\[([^\]|#^]+)(?:[#^][^\]|]*)?(?:\|[^\]]*)?\]\]/g)].map(m => m[1].trim()).filter(Boolean))];
+}
+
+/** 대상 이름 → 볼트 경로. 전체 경로면 그 파일, 이름만이면 같은 이름 가운데 경로가 가장 짧은 것(옵시디언과 같다). */
+function resolver(paths) {
+  const by = {};
+  const put = (k, p) => { if (!by[k] || by[k].length > p.length) by[k] = p; };
+  paths.forEach(p => {
+    const full = p.toLowerCase(), name = full.split('/').pop();
+    put(full, p); put(name, p);
+    if (/\.md$/.test(full)) { put(full.slice(0, -3), p); put(name.slice(0, -3), p); }
+  });
+  return n => by[n.toLowerCase()] || null;
+}
+
+/** 문서 탭: 볼트 전체를 훑는다. 데이터 폴더(skipTop), graphify-out, 점으로 시작하는 숨김 폴더는 뺀다. */
+function walkDocs(rel, skipTop, acc) {
+  for (const e of fs.readdirSync(path.join(vault, rel), { withFileTypes: true })) {
+    if (e.name.startsWith('.') || (!rel && (e.name === skipTop || e.name === 'graphify-out'))) continue;
+    const r = rel ? rel + '/' + e.name : e.name;
+    if (e.isDirectory()) walkDocs(r, skipTop, acc);
+    else if (/\.md$/i.test(e.name) || IMG.test(e.name)) acc.push(r);
+  }
+  return acc;
+}
+
 if (require.main === module) {
   if (!vault || !out || !roots.length) {
     console.error('사용법: node tools/sync-vault.js <볼트 폴더> <적을 파일> <훑을 폴더> ...');
@@ -76,6 +104,23 @@ if (require.main === module) {
   imgs.forEach(f => { imgM[f] = Math.floor(fs.statSync(path.join(vault, f)).mtimeMs); });
   fs.writeFileSync(out, JSON.stringify({ at: new Date().toISOString(), notes, imgs, imgM }));
   console.log(`작업 목록 ${notes.length}건, 그림 ${imgs.length}장(새로 읽은 노트 ${read}건)을 적었다: ${out}`);
+
+  // 문서 탭: 볼트 전체의 노트와 노트끼리의 링크. 「문서 목록.json」을 작업 목록 옆에 적는다
+  const docOut = path.join(path.dirname(out), '문서 목록.json');
+  const dataTop = path.relative(vault, path.dirname(out)).split(path.sep)[0];   // 데이터 폴더(desk)는 문서 탭에 내놓지 않는다
+  let oldDocs = {};
+  try { JSON.parse(fs.readFileSync(docOut, 'utf8')).docs.forEach(d => { oldDocs[d.path] = d; }); } catch (e) { /* 처음이면 전부 읽는다 */ }
+  const everything = walkDocs('', dataTop, []), resolve = resolver(everything);
+  let dread = 0;
+  const docs = everything.filter(f => /\.md$/i.test(f)).sort().map(rel => {
+    const st = fs.statSync(path.join(vault, rel)), m = Math.floor(st.mtimeMs), prev = oldDocs[rel];
+    // 글이 그대로면 지난번에 뽑은 이름(refs)을 다시 쓰고, 경로 풀기만 새로 한다(그 사이 생긴 노트를 가리킬 수 있다)
+    const refs = prev && prev.m === m && prev.z === st.size && prev.refs ? prev.refs : (dread++, wikiRefs(fs.readFileSync(path.join(vault, rel), 'utf8')));
+    const hit = [...new Set(refs.map(resolve).filter(Boolean))];
+    return { path: rel, m, z: st.size, refs, links: hit.filter(p => /\.md$/i.test(p) && p !== rel), imgs: hit.filter(p => IMG.test(p)) };
+  });
+  fs.writeFileSync(docOut, JSON.stringify({ at: new Date().toISOString(), docs }));
+  console.log(`문서 목록 ${docs.length}건(새로 읽은 노트 ${dread}건)을 적었다: ${docOut}`);
 }
 
-module.exports = { describe };
+module.exports = { describe, wikiRefs, resolver };

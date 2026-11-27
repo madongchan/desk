@@ -13,8 +13,9 @@
  */
 
 const TZ = 'Asia/Seoul';
-const VERSION = '2026-11-27c';
+const VERSION = '2026-11-27d';
 const WORK_FILE = '작업 목록.json';   // PC의 tools/sync-vault.js가 쓰는 파일. 서버는 읽기만 한다
+const DOC_FILE = '문서 목록.json';    // 문서 탭: 같은 프로그램이 볼트 전체를 훑어 쓴다(노트 경로와 노트끼리의 링크)
 const GIT_FILE = '작업 내역.md';   // PC의 tools/sync-git.js가 쓰는 파일. 서버는 읽기만 한다
 // 지원 서류: PC의 portfolio 저장소 build.js가 desk 폴더에 쓰는 한 파일짜리 문서들. 서버는 이 이름들만, 읽기만 한다
 const DOC_FILES = { '이력서': '이력서.html', '포트폴리오': '포트폴리오.html' };
@@ -217,13 +218,23 @@ function ocr_(url) {
  * 예전에는 요청마다 작업 목록 파일 전체를 읽어 대조했는데, 그 파일이 커지면서 그림 한 묶음마다 몇 초씩 더 걸려 경로 규칙으로 바꿨다.
  */
 function workImg_(folder, path) {
-  if (!/^(entities|career)\//.test(path) || path.split('/').some(function (s) { return s === '..' || s === '.' || s === ''; })) throw new Error('작업 목록에 없는 그림입니다');
+  vaultOk_(folder, path);
   const ext = path.split('.').pop().toLowerCase();
   const mime = { svg: 'image/svg+xml', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp' }[ext];
   if (!mime) throw new Error('그림 파일이 아닙니다');
   const bytes = under_(vault_(folder), path).getBlob().getBytes();
   if (bytes.length > 8 * 1024 * 1024) throw new Error('그림이 너무 큽니다(8MB 초과)');
   return { mime: mime, b64: Utilities.base64Encode(bytes) };
+}
+
+/**
+ * 화면이 청한 볼트 경로가 읽어도 되는 곳인지 가린다. 볼트(데이터 폴더의 위 폴더) 안이어야 하고,
+ * 데이터 폴더(급여, 근태 같은 desk 기록), graphify-out(기계 데이터), 점으로 시작하는 숨김 폴더(.obsidian, .trash)는 뺀다. ..은 받지 않는다.
+ */
+function vaultOk_(folder, path) {
+  const parts = String(path || '').split('/');
+  if (!path || parts.some(function (s) { return !s || s === '.' || s === '..' || s.charAt(0) === '.'; }) ||
+      parts[0] === folder.getName() || parts[0] === 'graphify-out') throw new Error('볼트에서 볼 수 없는 위치입니다');
 }
 
 /** PC가 만든 작업 목록을 읽는다. */
@@ -426,12 +437,23 @@ const ACTIONS = {
       imgs: idx.imgs || [], imgM: idx.imgM || {} };   // 그림 탭: 노트에 넣지 않은 그림까지. imgM은 그림을 고친 시각(화면 캐시가 낡았는지 가린다)
   },
 
-  /** 노트 하나의 글. 목록에 적힌 경로만 읽는다(드라이브의 다른 파일을 읽는 길이 되지 않게). */
+  /** 노트 하나의 글(작업 탭, 문서 탭). 볼트의 .md만, 데이터 폴더와 숨김 폴더는 빼고 읽는다(vaultOk_). 읽기만 한다. */
   workNote: function (a, folder) {
     const path = String(a.path || '');
-    if (!workIndex_(folder).notes.some(function (n) { return n.path === path; })) throw new Error('작업 목록에 없는 노트입니다');
+    vaultOk_(folder, path);
+    if (!/\.md$/i.test(path)) throw new Error('노트 파일이 아닙니다');
     const text = under_(vault_(folder), path).getBlob().getDataAsString('UTF-8');
     return { text: text.length > 200000 ? text.slice(0, 200000) + '\n\n…(너무 길어 여기까지만 보여 줍니다)' : text };
+  },
+  docNote: function (a, folder) { return ACTIONS.workNote(a, folder); },
+
+  /** 문서 탭의 목록. PC의 tools/sync-vault.js가 볼트 전체를 훑어 만든 파일에서 경로와 링크만 준다. */
+  docs: function (a, folder) {
+    const text = readText_(folder, DOC_FILE);
+    if (!text) throw new Error('문서 목록이 없습니다. PC에서 tools/sync-vault.js를 돌려 주세요');
+    const idx = JSON.parse(text);
+    if (!idx || !Array.isArray(idx.docs)) throw new Error('문서 목록 파일의 모양이 잘못되었습니다');
+    return { at: idx.at, docs: idx.docs.map(function (d) { return { path: d.path, links: d.links || [], imgs: d.imgs || [] }; }) };
   },
 
   /** 그림 하나. 작업 목록에 적힌 그림(노트가 쓰는 것, 또는 PC가 훑은 그림 목록)일 때만 읽는다. */

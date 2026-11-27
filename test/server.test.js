@@ -346,13 +346,22 @@ const walk = wk.getFilesByName;
 wk.getFilesByName = () => { throw new Error('다시 찾아 내려갔다'); };
 assert.strictEqual(post('workNote', { path: 'entities/게임/저장 수정.md' }).data.text, '# 저장 수정\n![[구조.svg]]\n');
 wk.getFilesByName = walk;
-assert.match(post('workNote', { path: 'entities/게임/목록에 없는 노트.md' }).error, /목록에 없는/);
-assert.match(post('workNote', { path: '../desk/급여.md' }).error, /목록에 없는/);
+// 볼트의 노트는 목록에 없어도 읽는다(문서 탭). 데이터 폴더(여기서는 todo), graphify-out, 숨김 폴더, ..은 읽지 않는다
+assert.strictEqual(post('docNote', { path: 'entities/게임/목록에 없는 노트.md' }).data.text, '비밀');
+root.createFile('급여.md', '급여 기록');
+['todo/급여.md', '../todo/급여.md', 'entities/../todo/급여.md', 'graphify-out/x.md', '.obsidian/app.md', 'entities/.숨김/a.md', '', 'entities//a.md']
+  .forEach(p => assert.match(post('docNote', { path: p }).error, /볼 수 없는 위치/, p));
+assert.match(post('docNote', { path: 'entities/게임/Docs/구조.svg' }).error, /노트 파일이 아닙니다/);
+// 문서 목록: PC가 쓴 파일에서 경로, 링크, 그림만 준다
+assert.match(post('docs', {}).error, /문서 목록이 없습니다/);
+const dfile = root.createFile('문서 목록.json', JSON.stringify({ at: 'T', docs: [{ path: 'entities/게임/저장 수정.md', m: 1, z: 2, refs: ['구조.svg'], links: [], imgs: ['entities/게임/Docs/구조.svg'] }] }));
+assert.deepStrictEqual(post('docs', {}).data, { at: 'T', docs: [{ path: 'entities/게임/저장 수정.md', links: [], imgs: ['entities/게임/Docs/구조.svg'] }] });
+root._files.splice(root._files.indexOf(dfile), 1);
 r = post('workImg', { path: 'entities/게임/Docs/구조.svg' });
 assert.deepStrictEqual([r.data.mime, Buffer.from(r.data.b64, 'base64').toString()], ['image/svg+xml', '<svg/>']);
 assert.match(post('workImg', { path: 'entities/게임/저장 수정.md' }).error, /그림 파일이 아닙니다/);   // 노트를 그림으로 읽을 수 없다
-assert.match(post('workImg', { path: 'desk/급여.png' }).error, /목록에 없는/);                    // 볼트의 entities, career 밖은 읽지 않는다
-assert.match(post('workImg', { path: 'entities/../desk/급여.png' }).error, /목록에 없는/);
+assert.match(post('workImg', { path: 'todo/급여.png' }).error, /볼 수 없는 위치/);                   // 데이터 폴더는 읽지 않는다
+assert.match(post('workImg', { path: 'entities/../todo/급여.png' }).error, /볼 수 없는 위치/);
 assert.deepStrictEqual(post('works', {}).data.imgs, []);                                            // 그림 목록이 없던 옛 파일도 읽는다
 // 그림 탭: 노트에 넣지 않은 그림도 PC가 적은 그림 목록에 있으면 읽어 준다
 wk.getFoldersByName('Docs').next().createFile('따로 그린 것.svg', '<svg id="b"/>');
