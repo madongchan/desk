@@ -39,7 +39,8 @@ function describe(rel, text, imageByName) {
   const sum = (lines.find(l => l.trim() && !/^(#|!\[|관련:|---|\||>|```|- |\* )/.test(l.trim())) || '').trim();
   const imgs = [];
   for (const m of body.matchAll(/!\[\[([^\]|]+)(?:\|[^\]]*)?\]\]/g)) {
-    const hit = imageByName[m[1].trim().split('/').pop().toLowerCase()];
+    // 볼트 기준 전체 경로로 적었으면 그 파일을, 이름만 적었으면 같은 이름의 그림을 찾는다(01_xxx.png처럼 이름이 겹치는 캡처가 있다)
+    const ref = m[1].trim(), hit = imageByName[ref.toLowerCase()] || imageByName[ref.split('/').pop().toLowerCase()];
     if (hit && !imgs.includes(hit)) imgs.push(hit);
   }
   return {
@@ -57,7 +58,7 @@ if (require.main === module) {
   try { JSON.parse(fs.readFileSync(out, 'utf8')).notes.forEach(n => { old[n.path] = n; }); } catch (e) { /* 처음이거나 깨졌으면 전부 다시 읽는다 */ }
   const files = roots.flatMap(r => walk(r, []));
   const imageByName = {};
-  files.filter(f => IMG.test(f)).forEach(f => { imageByName[f.split('/').pop().toLowerCase()] = f; });
+  files.filter(f => IMG.test(f)).forEach(f => { imageByName[f.split('/').pop().toLowerCase()] = f; imageByName[f.toLowerCase()] = f; });
   let read = 0;
   const notes = files.filter(f => /\.md$/i.test(f) && !SKIP.test(f)).map(rel => {
     const st = fs.statSync(path.join(vault, rel)), m = Math.floor(st.mtimeMs), prev = old[rel];

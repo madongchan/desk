@@ -203,6 +203,9 @@ assert.deepStrictEqual(nt.heads, ['원인', '수정']);
 assert.deepStrictEqual(nt.imgs, ['entities/게임/저장/Docs/구조.svg', 'entities/게임/저장/화면.png']);     // 못 찾은 그림과 겹친 그림은 뺀다
 nt = describe('career/2026-10-01 게임 — 종료 멈춤.md', '---\nproject: 게임\n---\n한 줄 요약이다.\n\n## Problem\n', {});
 assert.deepStrictEqual([nt.p, nt.s, nt.t, nt.d, nt.sum], ['게임', 'career', '종료 멈춤', '2026-10-01', '한 줄 요약이다.']);
+// 전체 경로로 적은 그림은 이름이 같은 다른 그림이 아니라 그 파일을 잡는다
+nt = describe('entities/게임/시험/2026-11-25 시험.md', '![[entities/게임/시험/가/01_a.png]]\n', { '01_a.png': 'entities/게임/시험/나/01_a.png', 'entities/게임/시험/가/01_a.png': 'entities/게임/시험/가/01_a.png' });
+assert.deepStrictEqual(nt.imgs, ['entities/게임/시험/가/01_a.png']);
 nt = describe('entities/도구/메모 (2026-09-02).md', '글\n', {});
 assert.deepStrictEqual([nt.p, nt.s, nt.t, nt.d], ['도구', '', '메모 (2026-09-02)', '2026-09-02']);
 
