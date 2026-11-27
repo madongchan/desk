@@ -13,7 +13,7 @@
  */
 
 const TZ = 'Asia/Seoul';
-const VERSION = '2026-11-26b';
+const VERSION = '2026-11-27a';
 const WORK_FILE = '작업 목록.json';   // PC의 tools/sync-vault.js가 쓰는 파일. 서버는 읽기만 한다
 const GIT_FILE = '작업 내역.md';   // PC의 tools/sync-git.js가 쓰는 파일. 서버는 읽기만 한다
 // 지원 서류: PC의 portfolio 저장소 build.js가 desk 폴더에 쓰는 한 파일짜리 문서들. 서버는 이 이름들만, 읽기만 한다
@@ -408,7 +408,8 @@ const ACTIONS = {
   /** 작업 화면의 목록. PC의 tools/sync-vault.js가 볼트를 훑어 만든 파일을 그대로 준다. */
   works: function (a, folder) {
     const idx = workIndex_(folder);
-    return { at: idx.at, notes: idx.notes.map(function (n) { const o = Object.assign({}, n); delete o.m; delete o.z; return o; }) };   // m, z는 PC 프로그램만 쓰는 값
+    return { at: idx.at, notes: idx.notes.map(function (n) { const o = Object.assign({}, n); delete o.m; delete o.z; return o; }),   // m, z는 PC 프로그램만 쓰는 값
+      imgs: idx.imgs || [] };   // 그림 탭: 노트에 넣지 않은 그림까지
   },
 
   /** 노트 하나의 글. 목록에 적힌 경로만 읽는다(드라이브의 다른 파일을 읽는 길이 되지 않게). */
@@ -419,10 +420,10 @@ const ACTIONS = {
     return { text: text.length > 200000 ? text.slice(0, 200000) + '\n\n…(너무 길어 여기까지만 보여 줍니다)' : text };
   },
 
-  /** 노트에 넣어 둔 그림 하나. 목록의 어느 노트가 쓰는 그림일 때만 읽는다. */
+  /** 그림 하나. 작업 목록에 적힌 그림(노트가 쓰는 것, 또는 PC가 훑은 그림 목록)일 때만 읽는다. */
   workImg: function (a, folder) {
-    const path = String(a.path || '');
-    if (!workIndex_(folder).notes.some(function (n) { return (n.imgs || []).indexOf(path) >= 0; })) throw new Error('작업 목록에 없는 그림입니다');
+    const path = String(a.path || ''), idx = workIndex_(folder);
+    if ((idx.imgs || []).indexOf(path) < 0 && !idx.notes.some(function (n) { return (n.imgs || []).indexOf(path) >= 0; })) throw new Error('작업 목록에 없는 그림입니다');
     const ext = path.split('.').pop().toLowerCase();
     const mime = { svg: 'image/svg+xml', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp' }[ext];
     if (!mime) throw new Error('그림 파일이 아닙니다');

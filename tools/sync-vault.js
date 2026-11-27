@@ -68,8 +68,10 @@ if (require.main === module) {
     if (!n.d) n.d = new Date(st.mtimeMs + 9 * 3600e3).toISOString().slice(0, 10);   // 날짜가 없으면 고친 날(서울)
     return Object.assign(n, { m, z: st.size });
   }).sort((a, b) => (a.d < b.d ? 1 : a.d > b.d ? -1 : a.path < b.path ? -1 : 1));
-  fs.writeFileSync(out, JSON.stringify({ at: new Date().toISOString(), notes }));
-  console.log(`작업 목록 ${notes.length}건(새로 읽은 것 ${read}건)을 적었다: ${out}`);
+  // 그림 탭은 노트에 넣지 않은 그림까지 보여 준다. 서버는 이 목록에 있는 그림만 읽어 준다
+  const imgs = files.filter(f => IMG.test(f)).sort();
+  fs.writeFileSync(out, JSON.stringify({ at: new Date().toISOString(), notes, imgs }));
+  console.log(`작업 목록 ${notes.length}건, 그림 ${imgs.length}장(새로 읽은 노트 ${read}건)을 적었다: ${out}`);
 }
 
 module.exports = { describe };
